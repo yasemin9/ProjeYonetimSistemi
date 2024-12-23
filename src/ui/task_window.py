@@ -1,168 +1,124 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from database.queries import read_tasks, create_task, update_task_status, delete_task, assign_task_to_employee
+from datetime import datetime
 
-class TaskWindow(tk.Frame):
-    def __init__(self, master):
+class TaskWindow(tk.Toplevel):
+    def __init__(self, master, previous_window=None):
         super().__init__(master)
-        self.master = master
-        self.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Görev Listeleme Bölümü
-        ttk.Label(self, text="Mevcut Görevler", font=("Arial", 14, "bold")).pack(pady=10)
-        self.task_list_frame = ttk.Frame(self)
-        self.task_list_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-        self.list_tasks()
+        self.title("Görev Detayları")
+        self.geometry("600x400")
+        self.resizable(False, False)
 
-        # Formlar Çerçevesi
-        self.form_frame = ttk.Frame(self)
-        self.form_frame.pack(fill=tk.BOTH, expand=True)
+        self.previous_window = previous_window  # Reference to the previous window
 
-        # Görev Formları
-        self.create_task_form()
-        ttk.Separator(self.form_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        self.update_task_form()
-        ttk.Separator(self.form_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        self.delete_task_form()
-        ttk.Separator(self.form_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-        self.assign_task_form()
+        self.task_name = tk.StringVar()
+        self.assigned_to = tk.StringVar()
+        self.start_date = tk.StringVar()
+        self.end_date = tk.StringVar()
+        self.man_days = tk.IntVar()
+        self.status = tk.StringVar(value="Tamamlanacak")
+        self.delay_days = tk.IntVar(value=0)
 
-    def list_tasks(self):
-        """Görevleri listele"""
-        for widget in self.task_list_frame.winfo_children():
-            widget.destroy()  # Eski listeyi temizle
+        # Başlık
+        header_label = tk.Label(self, text="Görev Detayları", font=("Arial", 20))
+        header_label.pack(pady=10)
 
-        tasks = read_tasks()
-        if not tasks:
-            ttk.Label(self.task_list_frame, text="Henüz görev bulunmamaktadır.", foreground="red").pack()
+        # Görev bilgileri çerçevesi
+        info_frame = ttk.LabelFrame(self, text="Görev Bilgileri")
+        info_frame.pack(fill=tk.BOTH, padx=10, pady=10, expand=True)
+
+        ttk.Label(info_frame, text="Görev Adı:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.task_name, width=30).grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(info_frame, text="Atanan Kişi:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.assigned_to, width=30).grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Label(info_frame, text="Başlangıç Tarihi (YYYY-MM-DD):").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.start_date, width=15).grid(row=2, column=1, padx=5, pady=5)
+
+        ttk.Label(info_frame, text="Bitiş Tarihi (YYYY-MM-DD):").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.end_date, width=15).grid(row=3, column=1, padx=5, pady=5)
+
+        ttk.Label(info_frame, text="Adam/Gün:").grid(row=4, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.man_days, width=10).grid(row=4, column=1, padx=5, pady=5)
+
+        ttk.Label(info_frame, text="Durum:").grid(row=5, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Combobox(info_frame, textvariable=self.status, values=["Tamamlanacak", "Devam Ediyor", "Tamamlandı"], width=15).grid(row=5, column=1, padx=5, pady=5)
+
+        ttk.Label(info_frame, text="Gecikme Gün Sayısı:").grid(row=6, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.delay_days, width=10, state="readonly").grid(row=6, column=1, padx=5, pady=5)
+
+        # Kaydet düğmesi
+        save_button = ttk.Button(self, text="Görevi Kaydet", command=self.save_task)
+        save_button.pack(pady=10)
+
+        # Geri Dön düğmesi
+        back_button = ttk.Button(self, text="Geri Dön", command=self.go_back)
+        back_button.pack(pady=10)
+
+
+        ttk.Button(button_frame, text="Geri Dön", command=self.go_back).pack(side=tk.LEFT, padx=5)
+        self.saved_task = None
+
+    def save_task(self):
+        # Alanların doluluğunu kontrol et
+        if not self.task_name.get() or not self.assigned_to.get() or not self.start_date.get() or not self.end_date.get() or not self.man_days.get():
+            messagebox.showwarning("Hata", "Lütfen tüm alanları doldurun!")
+            return
+
+        # Tarih formatlarını kontrol et
+        try:
+            start_date = datetime.strptime(self.start_date.get(), "%Y-%m-%d")
+            end_date = datetime.strptime(self.end_date.get(), "%Y-%m-%d")
+            if start_date > end_date:
+                messagebox.showwarning("Hata", "Başlangıç tarihi, bitiş tarihinden sonra olamaz!")
+                return
+        except ValueError:
+            messagebox.showwarning("Hata", "Tarih formatı hatalı! Lütfen YYYY-MM-DD formatında girin.")
+            return
+
+        # Gecikme gün sayısını hesapla
+        today = datetime.today()
+        if end_date < today:
+            delay = (today - end_date).days
+            self.delay_days.set(delay)
         else:
-            columns = ("ID", "Adı", "Durum", "Başlangıç Tarihi", "Bitiş Tarihi")
-            task_table = ttk.Treeview(self.task_list_frame, columns=columns, show="headings")
-            for col in columns:
-                task_table.heading(col, text=col)
-                task_table.column(col, width=150)
+            self.delay_days.set(0)
 
-            for task in tasks:
-                task_table.insert("", tk.END, values=(task[0], task[1], task[3], task[2], task[4]))
+        # Görevi kaydet
+        self.saved_task = {
+            "task_name": self.task_name.get(),
+            "assigned_to": self.assigned_to.get(),
+            "start_date": self.start_date.get(),
+            "end_date": self.end_date.get(),
+            "man_days": self.man_days.get(),
+            "status": self.status.get(),
+            "delay_days": self.delay_days.get()
+        }
 
-            task_table.pack(fill=tk.BOTH, expand=True)
+        messagebox.showinfo("Başarılı", "Görev başarıyla kaydedildi!")
+        self.destroy()
 
-    def create_task_form(self):
-        """Yeni görev ekleme formu oluştur"""
-        ttk.Label(self.form_frame, text="Yeni Görev Ekle", font=("Arial", 12, "bold")).pack(pady=5)
+    def go_back(self):
+        if self.previous_window:
+            self.previous_window.deiconify()  # Show the previous window
+        self.destroy()  # Close this window
 
-        form_frame = ttk.Frame(self.form_frame)
-        form_frame.pack(pady=5, fill=tk.X)
 
-        ttk.Label(form_frame, text="Görev Adı:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.task_name = ttk.Entry(form_frame, width=30)
-        self.task_name.grid(row=0, column=1, padx=5, pady=5)
+    def go_back(self):
+        # Geri gitmek için bu fonksiyonu ekliyoruz
+        self.destroy()  # Mevcut pencereyi kapat
+        self.master.deiconify()  # Ana pencereyi göster
+ 
 
-        ttk.Label(form_frame, text="Başlangıç Tarihi (YYYY-MM-DD):").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        self.start_date = ttk.Entry(form_frame, width=30)
-        self.start_date.grid(row=1, column=1, padx=5, pady=5)
 
-        ttk.Label(form_frame, text="Bitiş Tarihi (YYYY-MM-DD):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        self.end_date = ttk.Entry(form_frame, width=30)
-        self.end_date.grid(row=2, column=1, padx=5, pady=5)
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.withdraw()  # Ana pencereyi gizle
+    previous_window = tk.Toplevel(root)  # Simulate a previous window
+    previous_window.title("Previous Window")
+    previous_window.geometry("400x300")
 
-        ttk.Button(form_frame, text="Görev Ekle", command=self.add_task).grid(row=3, column=0, columnspan=2, pady=10)
-
-    def update_task_form(self):
-        """Görev durumu güncelleme formu oluştur"""
-        ttk.Label(self.form_frame, text="Görev Durumu Güncelle", font=("Arial", 12, "bold")).pack(pady=5)
-
-        form_frame = ttk.Frame(self.form_frame)
-        form_frame.pack(pady=5, fill=tk.X)
-
-        ttk.Label(form_frame, text="Görev ID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.task_id = ttk.Entry(form_frame, width=30)
-        self.task_id.grid(row=0, column=1, padx=5, pady=5)
-
-        ttk.Label(form_frame, text="Yeni Durum:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        self.task_status = ttk.Combobox(form_frame, values=["Tamamlanacak", "Devam Ediyor", "Tamamlandı"], state="readonly", width=28)
-        self.task_status.grid(row=1, column=1, padx=5, pady=5)
-        self.task_status.set("Tamamlanacak")  # Varsayılan durum
-
-        ttk.Button(form_frame, text="Durumu Güncelle", command=self.update_task_status).grid(row=2, column=0, columnspan=2, pady=10)
-
-    def delete_task_form(self):
-        """Görev silme formu oluştur"""
-        ttk.Label(self.form_frame, text="Görev Sil", font=("Arial", 12, "bold")).pack(pady=5)
-
-        form_frame = ttk.Frame(self.form_frame)
-        form_frame.pack(pady=5, fill=tk.X)
-
-        ttk.Label(form_frame, text="Görev ID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.delete_task_id = ttk.Entry(form_frame, width=30)
-        self.delete_task_id.grid(row=0, column=1, padx=5, pady=5)
-
-        ttk.Button(form_frame, text="Görevi Sil", command=self.delete_task).grid(row=1, column=0, columnspan=2, pady=10)
-
-    def assign_task_form(self):
-        """Göreve çalışan atama formu oluştur"""
-        ttk.Label(self.form_frame, text="Göreve Çalışan Ata", font=("Arial", 12, "bold")).pack(pady=5)
-
-        form_frame = ttk.Frame(self.form_frame)
-        form_frame.pack(pady=5, fill=tk.X)
-
-        ttk.Label(form_frame, text="Görev ID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
-        self.assign_task_id = ttk.Entry(form_frame, width=30)
-        self.assign_task_id.grid(row=0, column=1, padx=5, pady=5)
-
-        ttk.Label(form_frame, text="Çalışan ID:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        self.assign_employee_id = ttk.Entry(form_frame, width=30)
-        self.assign_employee_id.grid(row=1, column=1, padx=5, pady=5)
-
-        ttk.Button(form_frame, text="Ata", command=self.assign_task).grid(row=2, column=0, columnspan=2, pady=10)
-
-    def add_task(self):
-        """Yeni bir görev ekle"""
-        name = self.task_name.get()
-        start_date = self.start_date.get()
-        end_date = self.end_date.get()
-
-        if not name or not start_date or not end_date:
-            messagebox.showerror("Hata", "Tüm alanları doldurun!")
-            return
-
-        create_task(name, start_date, end_date)
-        messagebox.showinfo("Başarılı", "Görev başarıyla eklendi!")
-        self.list_tasks()
-
-    def update_task_status(self):
-        """Görev durumunu güncelle"""
-        task_id = self.task_id.get()
-        status = self.task_status.get()
-
-        if not task_id or not status:
-            messagebox.showerror("Hata", "Görev ID'si ve yeni durumu doldurun!")
-            return
-
-        update_task_status(task_id, status)
-        messagebox.showinfo("Başarılı", "Görev durumu başarıyla güncellendi!")
-        self.list_tasks()
-
-    def delete_task(self):
-        """Bir görevi sil"""
-        task_id = self.delete_task_id.get()
-
-        if not task_id:
-            messagebox.showerror("Hata", "Silmek için görev ID'si girin!")
-            return
-
-        delete_task(task_id)
-        messagebox.showinfo("Başarılı", "Görev başarıyla silindi!")
-        self.list_tasks()
-
-    def assign_task(self):
-        """Bir göreve çalışan ata"""
-        task_id = self.assign_task_id.get()
-        employee_id = self.assign_employee_id.get()
-
-        if not task_id or not employee_id:
-            messagebox.showerror("Hata", "Görev ve çalışan ID'sini doldurun!")
-            return
-
-        assign_task_to_employee(task_id, employee_id)
-        messagebox.showinfo("Başarılı", "Görev başarıyla çalışanla ilişkilendirildi!")
+    app = TaskWindow(root, previous_window)  # Pass the previous window to the TaskWindow
+    app.mainloop()

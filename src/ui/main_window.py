@@ -1,87 +1,79 @@
 import tkinter as tk
-from tkinter import font
+from tkinter import ttk, messagebox
 
-from ui.project_window import ProjectWindow
-from ui.employee_window import EmployeeWindow
-from ui.task_window import TaskWindow
+class MainWindow(tk.Tk):
+    def __init__(self):
+        super().__init__()
 
-class MainWindow:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Proje Yönetim Sistemi")
-        self.root.geometry("800x500")
-        self.root.config(bg="#f4f4f9")  # Arka plan rengini değiştirdik
+        # Ana pencere ayarları
+        self.title("Proje Yönetim Sistemi")
+        self.geometry("800x600")
+        self.resizable(False, False)
 
-        # Yazı tipi ve boyut ayarları
-        self.title_font = font.Font(family="Helvetica", size=40, weight="bold")
-        self.subtitle_font = font.Font(family="Arial", size=12, slant="italic")
-        self.menu_font = font.Font(family="Arial", size=12)
+        # Başlık kısmı
+        header_label = tk.Label(self, text="Proje Yönetim Sistemi", font=("Arial", 24), bg="blue", fg="white")
+        header_label.pack(fill=tk.X)
 
-        # Başlık
-        self.title_label = tk.Label(self.root, text="Proje Yönetim Sistemi", font=self.title_font, bg="#f4f4f9", fg="#2c3e50", relief="solid", bd=1)
-        self.title_label.pack(pady=(50, 20))  # Üstten ve alttan boşluk ekledik
+        # Proje listesi çerçevesi
+        self.project_frame = ttk.LabelFrame(self, text="Projeler")
+        self.project_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Alt başlık (slogan)
-        self.subtitle_label = tk.Label(self.root, text="Projelerinizi Kolayca Yönetin", font=self.subtitle_font, bg="#f4f4f9", fg="#7f8c8d")
-        self.subtitle_label.pack()
+        self.project_listbox = tk.Listbox(self.project_frame, height=15, font=("Arial", 12))
+        self.project_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
 
-        # Menü Çubuğu
-        menu_bar = tk.Menu(root, bg="#34495e", fg="white")
-        root.config(menu=menu_bar)
+        scrollbar = tk.Scrollbar(self.project_frame, orient=tk.VERTICAL, command=self.project_listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.project_listbox.config(yscrollcommand=scrollbar.set)
 
-        # Projeler Menüsü
-        project_menu = tk.Menu(menu_bar, tearoff=0, bg="#34495e", fg="white", font=self.menu_font)
-        project_menu.add_command(label="Projeleri Görüntüle", command=self.show_project_screen)
-        menu_bar.add_cascade(label="Projeler", menu=project_menu)
+        # Alt kısımda düğmeler
+        button_frame = tk.Frame(self)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
 
-        # Çalışanlar Menüsü
-        employee_menu = tk.Menu(menu_bar, tearoff=0, bg="#34495e", fg="white", font=self.menu_font)
-        employee_menu.add_command(label="Çalışanları Görüntüle", command=self.show_employee_screen)
-        menu_bar.add_cascade(label="Çalışanlar", menu=employee_menu)
+        add_project_btn = ttk.Button(button_frame, text="Yeni Proje Ekle", command=self.add_project)
+        add_project_btn.pack(side=tk.LEFT, padx=5)
 
-        # Görevler Menüsü
-        task_menu = tk.Menu(menu_bar, tearoff=0, bg="#34495e", fg="white", font=self.menu_font)
-        task_menu.add_command(label="Görevleri Görüntüle", command=self.show_task_screen)
-        menu_bar.add_cascade(label="Görevler", menu=task_menu)
+        view_project_btn = ttk.Button(button_frame, text="Projeyi Görüntüle", command=self.view_project)
+        view_project_btn.pack(side=tk.LEFT, padx=5)
 
-        # Alt düğme çubuğu (isteğe bağlı)
-        self.footer = tk.Label(self.root, text="© 2024 Proje Yönetim Sistemi | Geliştirildi", font=("Arial", 8), bg="#f4f4f9", fg="#7f8c8d")
-        self.footer.pack(side="bottom", fill="x", pady=10)
+        delete_project_btn = ttk.Button(button_frame, text="Projeyi Sil", command=self.delete_project)
+        delete_project_btn.pack(side=tk.LEFT, padx=5)
 
-        # Ekranlar (Frame'ler)
-        self.project_frame = None
-        self.employee_frame = None
-        self.task_frame = None
+        # Placeholder projeler
+        self.projects = []
+        self.load_projects()
 
-        # Başlangıçta bir ekran yok
-        self.current_frame = None
+    def load_projects(self):
+        # Placeholder veriler, daha sonra veritabanından alınacak
+        self.projects = ["Proje 1", "Proje 2", "Proje 3"]
+        for project in self.projects:
+            self.project_listbox.insert(tk.END, project)
 
-    def show_project_screen(self):
-        self.show_screen(self.project_frame, ProjectWindow)
+    def add_project(self):
+        new_project = tk.simpledialog.askstring("Yeni Proje", "Proje adını girin:")
+        if new_project:
+            self.projects.append(new_project)
+            self.project_listbox.insert(tk.END, new_project)
+            messagebox.showinfo("Başarılı", f"'{new_project}' projesi eklendi!")
 
-    def show_employee_screen(self):
-        self.show_screen(self.employee_frame, EmployeeWindow)
+    def view_project(self):
+        selected = self.project_listbox.curselection()
+        if not selected:
+            messagebox.showwarning("Hata", "Lütfen bir proje seçin!")
+            return
+        project_name = self.project_listbox.get(selected)
+        messagebox.showinfo("Proje Detayı", f"Seçilen proje: {project_name}")
 
-    def show_task_screen(self):
-        self.show_screen(self.task_frame, TaskWindow)
-
-    def show_screen(self, frame_variable, frame_class):
-        """Ekranı gösterme yardımcı fonksiyonu"""
-        # Önce mevcut ekranı gizle
-        if self.current_frame is not None:
-            self.current_frame.pack_forget()
-
-        # Eğer ekran daha önce oluşturulmadıysa, o zaman oluştur
-        if frame_variable is None:
-            frame_variable = frame_class(self.root)
-        
-        # Yeni ekranı göster
-        frame_variable.pack(fill="both", expand=True)
-        
-        # Şu anki ekranı güncelle
-        self.current_frame = frame_variable
+    def delete_project(self):
+        selected = self.project_listbox.curselection()
+        if not selected:
+            messagebox.showwarning("Hata", "Lütfen bir proje seçin!")
+            return
+        project_name = self.project_listbox.get(selected)
+        if messagebox.askyesno("Emin misiniz?", f"'{project_name}' projesini silmek istediğinizden emin misiniz?"):
+            self.project_listbox.delete(selected)
+            self.projects.remove(project_name)
+            messagebox.showinfo("Başarılı", f"'{project_name}' projesi silindi!")
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = MainWindow(root)
-    root.mainloop()
+    app = MainWindow()
+    app.mainloop()

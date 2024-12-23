@@ -1,116 +1,120 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from database.queries import read_employees, create_employee, delete_employee, update_employee, read_employee_tasks
 
-class EmployeeWindow(tk.Frame):
-    def __init__(self, master):
+class EmployeeWindow(tk.Toplevel):
+    def __init__(self, master=None):
         super().__init__(master)
-        self.master = master
-        self.master.title("Yönetim Paneli")
-        self.master.geometry("800x600")
-        self.master.configure(bg="#f9f9f9")
 
-        self.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.title("Çalışan Yönetimi")
+        self.geometry("800x600")
+        self.resizable(False, False)
 
-        self.tab_control = ttk.Notebook(self)
-        self.tab_control.pack(fill=tk.BOTH, expand=True)
+        self.employee_name = tk.StringVar()
+        self.employee_role = tk.StringVar()
+        self.project_tasks = []
+        self.completed_tasks = 0
+        self.incomplete_tasks = 0
 
-        self.employee_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(self.employee_tab, text="Çalışanlar")
+        # Başlık
+        header_label = tk.Label(self, text="Çalışan Yönetimi", font=("Arial", 20))
+        header_label.pack(pady=10)
 
-        self.setup_employee_tab()
+        # Çalışan Bilgileri Çerçevesi
+        info_frame = ttk.LabelFrame(self, text="Çalışan Bilgileri")
+        info_frame.pack(fill=tk.BOTH, padx=10, pady=10, expand=True)
 
-    def setup_employee_tab(self):
-        """Çalışanlar sekmesini yapılandır."""
-        ttk.Label(self.employee_tab, text="Çalışan Yönetimi", font=("Arial", 16)).pack(pady=10)
+        ttk.Label(info_frame, text="Ad Soyad:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.employee_name, width=30).grid(row=0, column=1, padx=5, pady=5)
 
-        self.employee_frame = ttk.Frame(self.employee_tab)
-        self.employee_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        ttk.Label(info_frame, text="Görev:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        ttk.Entry(info_frame, textvariable=self.employee_role, width=30).grid(row=1, column=1, padx=5, pady=5)
 
-        self.employee_list = ttk.Treeview(
-            self.employee_frame,
-            columns=("ID", "First Name", "Last Name"),
-            show="headings",
-            height=15
-        )
-        self.employee_list.heading("ID", text="ID")
-        self.employee_list.heading("First Name", text="Ad")
-        self.employee_list.heading("Last Name", text="Soyad")
-        self.employee_list.column("ID", width=50, anchor=tk.CENTER)
-        self.employee_list.column("First Name", width=150, anchor=tk.CENTER)
-        self.employee_list.column("Last Name", width=150, anchor=tk.CENTER)
-        self.employee_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+        # Görev Yönetimi
+        task_frame = ttk.LabelFrame(self, text="Çalışanın Görevleri")
+        task_frame.pack(fill=tk.BOTH, padx=10, pady=10, expand=True)
 
-        self.employee_list.bind("<ButtonRelease-1>", self.display_employee_details)
+        self.task_listbox = tk.Listbox(task_frame, height=10, width=50)
+        self.task_listbox.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
 
-        self.details_frame = ttk.Frame(self.employee_frame)
-        self.details_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(task_frame, orient=tk.VERTICAL, command=self.task_listbox.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.task_listbox.config(yscrollcommand=scrollbar.set)
 
-        ttk.Label(self.details_frame, text="Çalışan Görev ve Proje Detayları", font=("Arial", 14)).pack(pady=5)
-        self.details_text = tk.Text(self.details_frame, height=15, wrap=tk.WORD, state=tk.DISABLED)
-        self.details_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Görevleri Yükle
+        self.load_tasks_button = ttk.Button(task_frame, text="Görevleri Yükle", command=self.load_tasks)
+        self.load_tasks_button.pack(pady=5)
 
-        self.button_frame = ttk.Frame(self.employee_tab)
-        self.button_frame.pack(fill=tk.X, pady=10)
+        # Çalışan Performansı
+        performance_frame = ttk.LabelFrame(self, text="Performans Bilgileri")
+        performance_frame.pack(fill=tk.BOTH, padx=10, pady=10, expand=True)
 
-        ttk.Button(self.button_frame, text="Çalışan Ekle", command=self.add_employee).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="Çalışan Sil", command=self.delete_employee).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self.button_frame, text="Çalışan Düzenle", command=self.edit_employee).pack(side=tk.LEFT, padx=5)
+        ttk.Label(performance_frame, text="Tamamlanan Görevler:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.completed_label = ttk.Label(performance_frame, text=f"{self.completed_tasks}")
+        self.completed_label.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
 
-        self.refresh_employee_list()
+        ttk.Label(performance_frame, text="Tamamlanmayan Görevler:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.incomplete_label = ttk.Label(performance_frame, text=f"{self.incomplete_tasks}")
+        self.incomplete_label.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
 
-    def refresh_employee_list(self):
-        """Çalışan listesini yeniler."""
-        for item in self.employee_list.get_children():
-            self.employee_list.delete(item)
+        # Kaydet Butonu
+        save_button = ttk.Button(self, text="Çalışanı Kaydet", command=self.save_employee)
+        save_button.pack(pady=10)
 
-        employees = read_employees()
-        for employee in employees:
-            self.employee_list.insert("", tk.END, values=(employee[0], employee[1], employee[2]))
-
-    def display_employee_details(self, event):
-        """Seçili çalışanın görev ve proje bilgilerini gösterir."""
-        selected_item = self.employee_list.selection()
-        if not selected_item:
-            return
-
-        emp_id = self.employee_list.item(selected_item, "values")[0]
-        tasks = read_employee_tasks(emp_id)
-
-        self.details_text.configure(state=tk.NORMAL)
-        self.details_text.delete(1.0, tk.END)
+     # Geri Dön düğmesi
+        back_button = ttk.Button(self, text="Geri Dön", command=self.go_back)
+        back_button.pack(pady=10)
+        ttk.Button(button_frame, text="Geri Dön", command=self.go_back).pack(side=tk.LEFT, padx=5)
         
-        if tasks:
-            self.details_text.insert(tk.END, "Görevler ve Projeler:\n\n")
-            for task in tasks:
-                self.details_text.insert(tk.END, f"- {task['project_name']} - {task['task_name']}\n")
-        else:
-            self.details_text.insert(tk.END, "Bu çalışan için atanmış görev bulunmamaktadır.")
+        self.saved_employee = None
 
-        self.details_text.configure(state=tk.DISABLED)
+    def load_tasks(self):
+        # Çalışanın görevlerini listeye yükle
+        self.project_tasks = [
+            {"name": "Görev 1", "status": "Tamamlandı"},
+            {"name": "Görev 2", "status": "Devam Ediyor"},
+            {"name": "Görev 3", "status": "Tamamlanacak"},
+        ]
+        
+        self.task_listbox.delete(0, tk.END)
+        self.completed_tasks = 0
+        self.incomplete_tasks = 0
 
-    def add_employee(self):
-        """Yeni bir çalışan ekler."""
-        AddEditEmployeeWindow(self, mode="add")
+        for task in self.project_tasks:
+            self.task_listbox.insert(tk.END, f"{task['name']} - {task['status']}")
+            if task['status'] == "Tamamlandı":
+                self.completed_tasks += 1
+            else:
+                self.incomplete_tasks += 1
 
-    def delete_employee(self):
-        """Seçili çalışanı siler."""
-        selected_item = self.employee_list.selection()
-        if not selected_item:
-            messagebox.showerror("Hata", "Lütfen bir çalışan seçin.")
+        self.completed_label.config(text=f"{self.completed_tasks}")
+        self.incomplete_label.config(text=f"{self.incomplete_tasks}")
+
+    def save_employee(self):
+        if not self.employee_name.get() or not self.employee_role.get():
+            messagebox.showwarning("Hata", "Lütfen tüm alanları doldurun!")
             return
 
-        emp_id = self.employee_list.item(selected_item, "values")[0]
-        delete_employee(emp_id)
-        messagebox.showinfo("Başarılı", "Çalışan başarıyla silindi.")
-        self.refresh_employee_list()
+        self.saved_employee = {
+            "name": self.employee_name.get(),
+            "role": self.employee_role.get(),
+            "tasks": self.project_tasks,
+            "completed_tasks": self.completed_tasks,
+            "incomplete_tasks": self.incomplete_tasks
+        }
 
-    def edit_employee(self):
-        """Seçili çalışanı düzenler."""
-        selected_item = self.employee_list.selection()
-        if not selected_item:
-            messagebox.showerror("Hata", "Lütfen bir çalışan seçin.")
-            return
+        messagebox.showinfo("Başarılı", "Çalışan başarıyla kaydedildi!")
+        self.destroy()
 
-        emp_id = self.employee_list.item(selected_item, "values")[0]
-        AddEditEmployeeWindow(self, mode="edit", emp_id=emp_id)
+
+
+    def go_back(self):
+        # Geri gitmek için bu fonksiyonu ekliyoruz
+        self.destroy()  # Mevcut pencereyi kapat
+        self.master.deiconify()  # Ana pencereyi göster
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    root.withdraw()  # Ana pencereyi gizle
+    app = EmployeeWindow(root)  # Burada root'u 'master' olarak geçiyoruz
+    app.mainloop()

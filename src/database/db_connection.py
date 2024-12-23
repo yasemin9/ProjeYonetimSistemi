@@ -1,32 +1,51 @@
 import mysql.connector
 from mysql.connector import Error
 
-def connect_to_database():
-    """
-    Veritabanına bağlanır ve bağlantı nesnesini döner.
-    """
-    try:
-        # MySQL bağlantısı oluşturma
-        connection = mysql.connector.connect(
-            host="localhost",
-            user="root",  # MySQL kullanıcı adı
-            password="admin",  # MySQL şifresi
-            database="project_management"  # Kullanılacak veritabanı
-        )
-        if connection.is_connected():
-            print("Veritabanı bağlantısı başarılı!")
-            return connection
-    except Error as err:
-        # Hata durumunda ayrıntılı mesajlar gösterilir
-        if err.errno == 1049:
-            print("Error: Veritabanı bulunamadı. Lütfen 'project_management' veritabanının mevcut olduğundan emin olun.")
-        elif err.errno == 1045:
-            print("Error: Kullanıcı adı veya şifre yanlış.")
-        elif err.errno == 2003:
-            print("Error: Veritabanı sunucusuna bağlanılamıyor. 'localhost' ve '3306' portunu kontrol edin.")
-        else:
-            print(f"Error: {err}")
-        return None
-    finally:
-        # Başarısız bir bağlantı durumunda kapatma işlemi yapılırsa buradan eklenebilir
-        pass
+class DBConnection:
+    def __init__(self, host='localhost', database='project_management', user='root', password='admin'):
+        self.host = host
+        self.database = database
+        self.user = user
+        self.password = password
+        self.connection = None
+
+    def connect(self):
+        try:
+            self.connection = mysql.connector.connect(
+                host=self.host,
+                database=self.database,
+                user=self.user,
+                password=self.password
+            )
+            if self.connection.is_connected():
+                print(f"Connected to the database {self.database}")
+        except Error as e:
+            print(f"Error: {e}")
+            self.connection = None
+
+    def execute_query(self, query, params=None):
+        if self.connection is None:
+            raise ConnectionError("Database connection is not established.")
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(query, params)
+            self.connection.commit()
+            print("Query executed successfully.")
+        except Error as e:
+            print(f"Error: {e}")
+
+    def fetch_all(self, query, params=None):
+        if self.connection is None:
+            raise ConnectionError("Database connection is not established.")
+        try:
+            cursor = self.connection.cursor(dictionary=True)
+            cursor.execute(query, params)
+            return cursor.fetchall()
+        except Error as e:
+            print(f"Error: {e}")
+            return []
+
+    def close(self):
+        if self.connection and self.connection.is_connected():
+            self.connection.close()
+            print("Database connection closed.")
