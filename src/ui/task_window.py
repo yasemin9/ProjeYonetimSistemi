@@ -1,39 +1,31 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from database.queries import read_tasks, create_task, update_task_status, delete_task
+from database.queries import read_tasks, create_task, update_task_status, delete_task, assign_task_to_employee
 
-class TaskWindow:
+class TaskWindow(tk.Frame):
     def __init__(self, master):
-        self.window = tk.Toplevel(master)
-        self.window.title("Görevler")
-        self.window.geometry("800x600")
-
-        # Ana çerçeve
-        self.main_frame = ttk.Frame(self.window, padding=10)
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        super().__init__(master)
+        self.master = master
+        self.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         # Görev Listeleme Bölümü
-        ttk.Label(self.main_frame, text="Mevcut Görevler", font=("Arial", 14, "bold")).pack(pady=10)
-        self.task_list_frame = ttk.Frame(self.main_frame)
+        ttk.Label(self, text="Mevcut Görevler", font=("Arial", 14, "bold")).pack(pady=10)
+        self.task_list_frame = ttk.Frame(self)
         self.task_list_frame.pack(fill=tk.BOTH, expand=True, pady=10)
         self.list_tasks()
 
         # Formlar Çerçevesi
-        self.form_frame = ttk.Frame(self.main_frame)
+        self.form_frame = ttk.Frame(self)
         self.form_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Yeni Görev Ekleme Bölümü
+        # Görev Formları
         self.create_task_form()
-
         ttk.Separator(self.form_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-
-        # Görev Durumu Güncelleme Bölümü
         self.update_task_form()
-
         ttk.Separator(self.form_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-
-        # Görev Silme Bölümü
         self.delete_task_form()
+        ttk.Separator(self.form_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+        self.assign_task_form()
 
     def list_tasks(self):
         """Görevleri listele"""
@@ -48,7 +40,7 @@ class TaskWindow:
             task_table = ttk.Treeview(self.task_list_frame, columns=columns, show="headings")
             for col in columns:
                 task_table.heading(col, text=col)
-                task_table.column(col, width=120)
+                task_table.column(col, width=150)
 
             for task in tasks:
                 task_table.insert("", tk.END, values=(task[0], task[1], task[3], task[2], task[4]))
@@ -107,6 +99,23 @@ class TaskWindow:
 
         ttk.Button(form_frame, text="Görevi Sil", command=self.delete_task).grid(row=1, column=0, columnspan=2, pady=10)
 
+    def assign_task_form(self):
+        """Göreve çalışan atama formu oluştur"""
+        ttk.Label(self.form_frame, text="Göreve Çalışan Ata", font=("Arial", 12, "bold")).pack(pady=5)
+
+        form_frame = ttk.Frame(self.form_frame)
+        form_frame.pack(pady=5, fill=tk.X)
+
+        ttk.Label(form_frame, text="Görev ID:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        self.assign_task_id = ttk.Entry(form_frame, width=30)
+        self.assign_task_id.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(form_frame, text="Çalışan ID:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        self.assign_employee_id = ttk.Entry(form_frame, width=30)
+        self.assign_employee_id.grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Button(form_frame, text="Ata", command=self.assign_task).grid(row=2, column=0, columnspan=2, pady=10)
+
     def add_task(self):
         """Yeni bir görev ekle"""
         name = self.task_name.get()
@@ -145,3 +154,15 @@ class TaskWindow:
         delete_task(task_id)
         messagebox.showinfo("Başarılı", "Görev başarıyla silindi!")
         self.list_tasks()
+
+    def assign_task(self):
+        """Bir göreve çalışan ata"""
+        task_id = self.assign_task_id.get()
+        employee_id = self.assign_employee_id.get()
+
+        if not task_id or not employee_id:
+            messagebox.showerror("Hata", "Görev ve çalışan ID'sini doldurun!")
+            return
+
+        assign_task_to_employee(task_id, employee_id)
+        messagebox.showinfo("Başarılı", "Görev başarıyla çalışanla ilişkilendirildi!")
