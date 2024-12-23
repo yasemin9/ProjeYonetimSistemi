@@ -1,23 +1,205 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from datetime import datetime
+import mysql.connector
+from mysql.connector import Error
+
+# Veritabanı bağlantısı fonksiyonu
+def create_connection():
+    try:
+        connection = mysql.connector.connect(
+            host="localhost",  # Veritabanı sunucusunun adresi
+            database="project_management",  # Veritabanı adı
+            user="root",  # Kullanıcı adı
+            password="admin"  # Şifre
+        )
+
+        if connection.is_connected():
+            print("Veritabanına bağlanıldı!")
+            return connection
+        else:
+            print("Bağlantı sağlanamadı!")
+            return None
+    except Error as e:
+        print(f"Hata: {e}")
+        return None
 
 class ProjectWindow(tk.Toplevel):
     def __init__(self, master):
         super().__init__(master)
 
-        self.title("Proje Detayları")
+        self.title("Projeleri Yönet")
         self.geometry("800x600")
         self.resizable(False, False)
 
-        # Proje bilgileri
-        self.project_name = tk.StringVar()
+        # Başlık
+        header_label = tk.Label(self, text="Projeleri Yönet", font=("Arial", 20))
+        header_label.pack(pady=10)
+
+        # Proje listeleme çerçevesi
+        project_frame = ttk.LabelFrame(self, text="Projeler")
+        project_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        self.project_tree = ttk.Treeview(project_frame, columns=("Ad", "Başlangıç Tarihi", "Bitiş Tarihi"), show="headings")
+        self.project_tree.heading("Ad", text="Proje Adı")
+        self.project_tree.heading("Başlangıç Tarihi", text="Başlangıç Tarihi")
+        self.project_tree.heading("Bitiş Tarihi", text="Bitiş Tarihi")
+        self.project_tree.column("Ad", width=200)
+        self.project_tree.column("Başlangıç Tarihi", width=150)
+        self.project_tree.column("Bitiş Tarihi", width=150)
+        self.project_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
+
+        scrollbar = ttk.Scrollbar(project_frame, orient=tk.VERTICAL, command=self.project_tree.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.project_tree.config(yscrollcommand=scrollbar.set)
+
+        # Projeleri veritabanından çekme
+        self.load_project_data()
+
+        # Alt düğme çerçevesi
+        button_frame = tk.Frame(self)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        ttk.Button(button_frame, text="Proje Ekle", command=self.add_project).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Proje Sil", command=self.delete_project).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Proje Güncelle", command=self.update_project).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Geri Dön", command=self.go_back).pack(side=tk.LEFT, padx=5)
+
+    def load_project_data(self):
+        """Projeleri veritabanından yükler."""
+        connection = create_connection()
+        if connection:
+            cursor = connection.cursor()
+            try:
+                cursor.execute("SELECT * FROM projects")
+                projects = cursor.fetchall()
+                for project in projects:
+                    self.project_tree.insert("", tk.END, values=(project[1], project[2], project[3]))
+
+            except Error as e:
+                print(f"Veritabanı hatası: {e}")
+            finally:
+                cursor.close()
+                connection.close()
+
+    def add_project(self):
+        project_window = ProjectEditWindow(self)
+        self.wait_window(project_window)
+
+        if project_window.new_project:
+            # Yeni projeyi veritabanına kaydetme
+            connection = create_connection()
+            if connection:
+                cursor = connection.cursor()
+                try:
+                    query = """INSERT INTO projects (name, start_date, end_date) 
+                               VALUES (%s, %s, %s)"""
+                    cursor.execute(query, (
+                        project_window.new_project["name"],
+                        project_window.new_project["start_date"],
+                        project_window.new_project["end_date"]
+                    ))
+                    connection.commit()
+                    messagebox.showinfo("Başarılı", "Proje başarıyla eklendi!")
+                    self.project_tree.insert("", tk.END, values=(
+                        project_window.new_project["name"],
+                        project_window.new_project["start_date"],
+                        project_window.new_project["end_date"]
+                    ))
+                except Error as e:
+                    print(f"Veritabanı hatası: {e}")
+                    messagebox.showerror("Hata", "Proje eklenemedi.")
+                finally:
+                    cursor.close()
+                    connection.close()
+
+    def delete_project(self):
+        selected_item = self.project_tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Hata", "Lütfen bir proje seçin!")
+            return
+
+        for item in selected_item:
+            project_name = self.project_tree.item(item, "values")[0]
+
+            # Veritabanından projeyi silme
+            connection = create_connection()
+            if connection:
+                cursor = connection.cursor()
+                try:
+                    query = """DELETE FROM projects WHERE name = %s"""
+                    cursor.execute(query, (project_name,))
+                    connection.commit()
+                    messagebox.showinfo("Başarılı", "Proje başarıyla silindi!")
+                except Error as e:
+                    print(f"Veritabanı hatası: {e}")
+                    messagebox.showerror("Hata", "Proje silinemedi.")
+                finally:
+                    cursor.close()
+                    connection.close()
+
+            # Listeyi güncelle
+            self.project_tree.delete(item)
+
+    def update_project(self):
+        selected_item = self.project_tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Hata", "Lütfen bir proje seçin!")
+            return
+
+        # Proje güncelleme penceresini aç
+        project_name = self.project_tree.item(selected_item[0], "values")[0]
+        project_window = ProjectEditWindow(self, project_name)
+        self.wait_window(project_window)
+
+        if project_window.new_project:
+            # Veritabanında projeyi güncelleme
+            connection = create_connection()
+            if connection:
+                cursor = connection.cursor()
+                try:
+                    query = """UPDATE projects 
+                               SET name = %s, start_date = %s, end_date = %s 
+                               WHERE name = %s"""
+                    cursor.execute(query, (
+                        project_window.new_project["name"],
+                        project_window.new_project["start_date"],
+                        project_window.new_project["end_date"],
+                        project_name
+                    ))
+                    connection.commit()
+                    messagebox.showinfo("Başarılı", "Proje başarıyla güncellendi!")
+                except Error as e:
+                    print(f"Veritabanı hatası: {e}")
+                    messagebox.showerror("Hata", "Proje güncellenemedi.")
+                finally:
+                    cursor.close()
+                    connection.close()
+
+            # Görünümü güncelle
+            self.project_tree.item(selected_item[0], values=(
+                project_window.new_project["name"],
+                project_window.new_project["start_date"],
+                project_window.new_project["end_date"]
+            ))
+
+    def go_back(self):
+        self.destroy()
+
+class ProjectEditWindow(tk.Toplevel):
+    def __init__(self, master, project_name=None):
+        super().__init__(master)
+        self.title("Proje Ekle/Düzenle")
+        self.geometry("400x400")
+
+        self.new_project = None
+
+        # Proje adı
+        self.project_name = tk.StringVar(value=project_name if project_name else "")
         self.start_date = tk.StringVar()
         self.end_date = tk.StringVar()
-        self.tasks = []  # Görevlerin tutulduğu liste
 
         # Başlık
-        header_label = tk.Label(self, text="Proje Detayları", font=("Arial", 20))
+        header_label = tk.Label(self, text="Proje Detayları", font=("Arial", 16))
         header_label.pack(pady=10)
 
         # Proje bilgileri çerçevesi
@@ -33,139 +215,16 @@ class ProjectWindow(tk.Toplevel):
         ttk.Label(info_frame, text="Bitiş Tarihi (YYYY-MM-DD):").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
         ttk.Entry(info_frame, textvariable=self.end_date, width=15).grid(row=2, column=1, padx=5, pady=5)
 
-        # Görev listesi çerçevesi
-        task_frame = ttk.LabelFrame(self, text="Görevler")
-        task_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        self.task_tree = ttk.Treeview(task_frame, columns=("Ad", "Başlangıç", "Adam/Gün", "Durum"), show="headings")
-        self.task_tree.heading("Ad", text="Görev Adı")
-        self.task_tree.heading("Başlangıç", text="Başlangıç Tarihi")
-        self.task_tree.heading("Adam/Gün", text="Adam/Gün")
-        self.task_tree.heading("Durum", text="Durum")
-        self.task_tree.column("Ad", width=200)
-        self.task_tree.column("Başlangıç", width=150)
-        self.task_tree.column("Adam/Gün", width=100)
-        self.task_tree.column("Durum", width=150)
-        self.task_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
-
-        scrollbar = ttk.Scrollbar(task_frame, orient=tk.VERTICAL, command=self.task_tree.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.task_tree.config(yscrollcommand=scrollbar.set)
-
-        # Alt düğme çerçevesi
+        # Ekleme ve Güncelleme butonu
         button_frame = tk.Frame(self)
-        button_frame.pack(fill=tk.X, padx=10, pady=10)
+        button_frame.pack(pady=10)
 
-        ttk.Button(button_frame, text="Görev Ekle", command=self.add_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Görev Sil", command=self.delete_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Görevi Güncelle", command=self.update_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Kaydet", command=self.save_project).pack(side=tk.RIGHT, padx=5)
-        # Back button to go back to the main screen
-        ttk.Button(button_frame, text="Geri Dön", command=self.go_back).pack(side=tk.LEFT, padx=5)
-
-    def add_task(self):
-        # Görev ekleme penceresi aç
-        task_window = TaskWindow(self)
-        self.wait_window(task_window)
-
-        # Eğer yeni görev dönerse listeye ekle
-        if task_window.new_task:
-            self.tasks.append(task_window.new_task)
-            self.task_tree.insert("", tk.END, values=(
-                task_window.new_task["name"],
-                task_window.new_task["start_date"],
-                task_window.new_task["man_days"],
-                task_window.new_task["status"]
-            ))
-
-    def delete_task(self):
-        selected_item = self.task_tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Hata", "Lütfen bir görev seçin!")
-            return
-
-        for item in selected_item:
-            self.task_tree.delete(item)
-            index = self.task_tree.index(item)
-            del self.tasks[index]
-
-        messagebox.showinfo("Başarılı", "Seçilen görev(ler) silindi!")
-
-    def update_task(self):
-        # Güncelleme işlemleri eklenebilir
-        pass
+        ttk.Button(button_frame, text="Kaydet", command=self.save_project).pack(padx=5)
 
     def save_project(self):
-        if not self.project_name.get() or not self.start_date.get() or not self.end_date.get():
-            messagebox.showwarning("Hata", "Lütfen tüm proje bilgilerini doldurun!")
-            return
-
-        try:
-            start_date = datetime.strptime(self.start_date.get(), "%Y-%m-%d")
-            end_date = datetime.strptime(self.end_date.get(), "%Y-%m-%d")
-            if start_date >= end_date:
-                messagebox.showwarning("Hata", "Bitiş tarihi başlangıç tarihinden önce olamaz!")
-                return
-        except ValueError:
-            messagebox.showwarning("Hata", "Tarih formatı hatalı! Lütfen YYYY-MM-DD formatında girin.")
-            return
-
-        messagebox.showinfo("Başarılı", f"'{self.project_name.get()}' projesi başarıyla kaydedildi!")
-
-    def go_back(self):
-        # Geri gitmek için bu fonksiyonu ekliyoruz
-        self.destroy()  # Mevcut pencereyi kapat
-        self.master.deiconify()  # Ana pencereyi göster
-
-class TaskWindow(tk.Toplevel):
-    def __init__(self, master):
-        super().__init__(master)
-        self.new_task = None
-
-        self.title("Görev Ekle")
-        self.geometry("400x300")
-        self.resizable(False, False)
-
-        self.task_name = tk.StringVar()
-        self.start_date = tk.StringVar()
-        self.man_days = tk.IntVar()
-        self.status = tk.StringVar(value="Tamamlanacak")
-
-        ttk.Label(self, text="Görev Adı:").pack(pady=5)
-        ttk.Entry(self, textvariable=self.task_name).pack(pady=5)
-
-        ttk.Label(self, text="Başlangıç Tarihi (YYYY-MM-DD):").pack(pady=5)
-        ttk.Entry(self, textvariable=self.start_date).pack(pady=5)
-
-        ttk.Label(self, text="Adam/Gün:").pack(pady=5)
-        ttk.Entry(self, textvariable=self.man_days).pack(pady=5)
-
-        ttk.Label(self, text="Durum:").pack(pady=5)
-        ttk.Combobox(self, textvariable=self.status, values=["Tamamlanacak", "Devam Ediyor", "Tamamlandı"]).pack(pady=5)
-
-        ttk.Button(self, text="Ekle", command=self.save_task).pack(pady=10)
-
-    def save_task(self):
-        if not self.task_name.get() or not self.start_date.get() or not self.man_days.get():
-            messagebox.showwarning("Hata", "Lütfen tüm alanları doldurun!")
-            return
-
-        try:
-            datetime.strptime(self.start_date.get(), "%Y-%m-%d")
-        except ValueError:
-            messagebox.showwarning("Hata", "Tarih formatı hatalı! Lütfen YYYY-MM-DD formatında girin.")
-            return
-
-        self.new_task = {
-            "name": self.task_name.get(),
+        self.new_project = {
+            "name": self.project_name.get(),
             "start_date": self.start_date.get(),
-            "man_days": self.man_days.get(),
-            "status": self.status.get()
+            "end_date": self.end_date.get()
         }
         self.destroy()
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.withdraw()  # Ana pencereyi gizle
-    app = ProjectWindow(root)  # 'root' parametresi geçilir
-    app.mainloop()
