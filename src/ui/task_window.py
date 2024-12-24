@@ -1,21 +1,27 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
-import sqlite3
+import mysql.connector
 
 # Veritabanı bağlantısı ve tablo oluşturma
-conn = sqlite3.connect("tasks.db")
+conn = mysql.connector.connect(
+    host="localhost",
+    user="root",  # MySQL kullanıcı adınız
+    password="2468",  # MySQL şifreniz
+    database="project_management"  # Kullanılacak veritabanı
+)
 cursor = conn.cursor()
+
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    task_name TEXT NOT NULL,
-    assigned_to TEXT NOT NULL,
-    start_date TEXT NOT NULL,
-    end_date TEXT NOT NULL,
-    man_days INTEGER NOT NULL,
-    status TEXT NOT NULL,
-    delay_days INTEGER DEFAULT 0
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    task_name VARCHAR(255) NOT NULL,
+    assigned_to VARCHAR(255) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    man_days INT NOT NULL,
+    status ENUM('Tamamlanacak', 'Devam Ediyor', 'Tamamlandı') NOT NULL,
+    delay_days INT DEFAULT 0
 )
 ''')
 conn.commit()
@@ -92,99 +98,118 @@ class TaskWindow(tk.Toplevel):
         ttk.Button(save_button_frame, text="Görev Kaydet", command=self.save_task).pack(side=tk.LEFT, padx=5)
         ttk.Button(save_button_frame, text="İptal", command=self.cancel_task_form).pack(side=tk.LEFT, padx=5)
 
+    def load_tasks(self):
+        """Veritabanından görevleri yükler ve ağaç yapısına ekler."""
+        self.tree.delete(*self.tree.get_children())
+        query = "SELECT * FROM tasks"
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+        for row in rows:
+            self.tree.insert("", tk.END, values=row)
+
     def show_task_form(self):
-        """Görev bilgileri formunu göster"""
-        self.info_frame.pack(fill=tk.BOTH, padx=10, pady=10, expand=True)
+        """Görev ekleme/düzenleme formunu gösterir."""
+        self.info_frame.pack(fill=tk.BOTH, padx=10, pady=10)
 
     def cancel_task_form(self):
-        """Görev bilgileri formunu gizle"""
+        """Görev ekleme/düzenleme formunu gizler."""
         self.info_frame.pack_forget()
-
-    def load_tasks(self):
-        """Görevleri yükle ve tabloyu güncelle"""
-        for row in self.tree.get_children():
-            self.tree.delete(row)
-
-        cursor.execute("SELECT * FROM tasks")
-        for task in cursor.fetchall():
-            self.tree.insert("", tk.END, values=task)
 
     def save_task(self):
-        """Yeni görev kaydet"""
-        if not self.task_name.get() or not self.assigned_to.get() or not self.start_date.get() or not self.end_date.get() or not self.man_days.get():
-            messagebox.showwarning("Hata", "Lütfen tüm alanları doldurun!")
-            return
-
+        """Görevi veritabanına kaydeder."""
         try:
-            start_date = datetime.strptime(self.start_date.get(), "%Y-%m-%d")
-            end_date = datetime.strptime(self.end_date.get(), "%Y-%m-%d")
-            if start_date > end_date:
-                messagebox.showwarning("Hata", "Başlangıç tarihi, bitiş tarihinden sonra olamaz!")
+            task_name = self.task_name.get()
+            assigned_to = self.assigned_to.get()
+            start_date = datetime.strptime(self.start_date.get(), "%Y-%m-%d").date()
+            end_date = datetime.strptime(self.end_date.get(), "%Y-%m-%d").date()
+            man_days = self.man_days.get()
+            status = self.status.get()
+
+            if not task_name or not assigned_to:
+                messagebox.showwarning("Uyarı", "Tüm alanları doldurmalısınız.")
                 return
-        except ValueError:
-            messagebox.showwarning("Hata", "Tarih formatı hatalı! Lütfen YYYY-MM-DD formatında girin.")
-            return
 
-        today = datetime.today()
-        if end_date < today:
-            delay = (today - end_date).days
-            self.delay_days.set(delay)
-        else:
-            self.delay_days.set(0)
+            # Gecikme gün sayısını hesapla
+            delay_days = max((datetime.now().date() - end_date).days, 0) if status == "Tamamlandı" else 0
 
-        cursor.execute('''
-        INSERT INTO tasks (task_name, assigned_to, start_date, end_date, man_days, status, delay_days)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (self.task_name.get(), self.assigned_to.get(), self.start_date.get(), self.end_date.get(), self.man_days.get(), self.status.get(), self.delay_days.get()))
-        conn.commit()
+            query = """
+                INSERT INTO tasks (task_name, assigned_to, start_date, end_date, man_days, status, delay_days)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (task_name, assigned_to, start_date, end_date, man_days, status, delay_days))
+            conn.commit()
 
-        messagebox.showinfo("Başarılı", "Görev başarıyla kaydedildi!")
-        self.info_frame.pack_forget()
-        self.load_tasks()
+            self.load_tasks()
+            messagebox.showinfo("Başarılı", "Görev kaydedildi.")
+            self.cancel_task_form()
+        except Exception as e:
+            messagebox.showerror("Hata", f"Görev kaydedilirken bir hata oluştu: {e}")
 
     def delete_task(self):
-        selected_item = self.tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Hata", "Lütfen silmek için bir görev seçin!")
-            return
+        """Seçili görevi veritabanından siler."""
+        try:
+            selected_item = self.tree.selection()
+            if not selected_item:
+                messagebox.showwarning("Uyarı", "Silmek için bir görev seçmelisiniz.")
+                return
 
-        task_id = self.tree.item(selected_item, "values")[0]
-        confirm = messagebox.askyesno("Onay", "Bu görevi silmek istediğinizden emin misiniz?")
-        if confirm:
-            cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            task_id = self.tree.item(selected_item)["values"][0]
+            query = "DELETE FROM tasks WHERE id = %s"
+            cursor.execute(query, (task_id,))
             conn.commit()
+
             self.load_tasks()
-            messagebox.showinfo("Başarılı", "Görev başarıyla silindi!")
+            messagebox.showinfo("Başarılı", "Görev silindi.")
+        except Exception as e:
+            messagebox.showerror("Hata", f"Görev silinirken bir hata oluştu: {e}")
 
     def edit_task(self):
-        selected_item = self.tree.selection()
-        if not selected_item:
-            messagebox.showwarning("Hata", "Lütfen düzenlemek için bir görev seçin!")
-            return
+        """Seçili görevi düzenlemek için formu doldurur."""
+        try:
+            selected_item = self.tree.selection()
+            if not selected_item:
+                messagebox.showwarning("Uyarı", "Düzenlemek için bir görev seçmelisiniz.")
+                return
 
-        task_id = self.tree.item(selected_item, "values")[0]
-        cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
-        task = cursor.fetchone()
+            task_data = self.tree.item(selected_item)["values"]
 
-        if task:
-            self.task_name.set(task[1])
-            self.assigned_to.set(task[2])
-            self.start_date.set(task[3])
-            self.end_date.set(task[4])
-            self.man_days.set(task[5])
-            self.status.set(task[6])
-            self.delay_days.set(task[7])
+            self.task_name.set(task_data[1])
+            self.assigned_to.set(task_data[2])
+            self.start_date.set(task_data[3])
+            self.end_date.set(task_data[4])
+            self.man_days.set(task_data[5])
+            self.status.set(task_data[6])
+            self.delay_days.set(task_data[7])
 
             self.show_task_form()
+        except Exception as e:
+            messagebox.showerror("Hata", f"Görev düzenlenirken bir hata oluştu: {e}")
 
     def go_back(self):
-        # Geri gitmek için bu fonksiyonu ekliyoruz
-        self.destroy()  # Mevcut pencereyi kapat
-        self.master.deiconify()  # Ana pencereyi göster
+        """Bir önceki pencereye geri döner."""
+        if self.previous_window:
+            self.destroy()
+            self.previous_window.deiconify()
+        else:
+            self.destroy()
 
+
+# Ana program
 if __name__ == "__main__":
     root = tk.Tk()
-    root.withdraw()
-    TaskWindow(root)
+    root.title("Proje Yönetim Sistemi")
+    root.geometry("400x300")
+
+    def open_task_window():
+        """Görev penceresini açar."""
+        root.withdraw()
+        TaskWindow(root)
+
+    ttk.Button(root, text="Görevleri Yönet", command=open_task_window).pack(pady=20)
+
     root.mainloop()
+
+    # Veritabanı bağlantısını kapat
     conn.close()
+

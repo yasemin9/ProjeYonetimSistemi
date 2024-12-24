@@ -10,7 +10,7 @@ def create_connection():
             host="localhost",  # Veritabanı sunucusunun adresi
             database="project_management",  # Veritabanı adı
             user="root",  # Kullanıcı adı
-            password="admin"  # Şifre
+            password="2468"  # Şifre
         )
 
         if connection.is_connected():
