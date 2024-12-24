@@ -183,8 +183,10 @@ class ProjectWindow(tk.Toplevel):
             ))
 
     def go_back(self):
-        self.destroy()
-
+        # Geri gitmek için bu fonksiyonu ekliyoruz
+        self.destroy()  # Mevcut pencereyi kapat
+        self.master.deiconify()  # Ana pencereyi göster
+        
 class ProjectEditWindow(tk.Toplevel):
     def __init__(self, master, project_name=None):
         super().__init__(master)
