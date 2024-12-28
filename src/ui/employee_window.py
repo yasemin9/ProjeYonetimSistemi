@@ -91,13 +91,17 @@ def open_employee_window():
         ttk.Button(edit_window, text="Kaydet", command=save_edited_employee).pack(pady=10)
 
     def view_employee_details():
+        # Seçilen çalışanı al
         selected_item = employee_list.selection()
         if not selected_item:
             messagebox.showerror("Hata", "Detaylarını görmek için bir çalışan seçiniz.")
             return
 
+        # Seçilen çalışanın ID'sini al
         employee_id = employee_list.item(selected_item)["values"][0]
+        print(f"Employee ID: {employee_id}")  # Debugging line
 
+        # Veritabanı bağlantısı kur ve görevleri çek
         connection = sqlite3.connect("project_management.db")
         cursor = connection.cursor()
 
@@ -113,18 +117,27 @@ def open_employee_window():
         tasks = cursor.fetchall()
         connection.close()
 
+        # Eğer çalışan için görev yoksa uyarı ver
+        if not tasks:
+            messagebox.showinfo("Bilgi", "Bu çalışanın görevi yok.")
+            return
+
+        # Detaylar penceresini oluştur
         details_window = tk.Toplevel()
         details_window.title("Çalışan Detayları")
         details_window.geometry("600x400")
 
+        # Başlık etiketi
         ttk.Label(details_window, text="Çalışanın Görev Detayları:").pack(pady=10)
 
+        # Treeview widget'ı oluştur
         details_list = ttk.Treeview(details_window, columns=("Proje", "Görev", "Durum"), show="headings")
         details_list.heading("Proje", text="Proje")
         details_list.heading("Görev", text="Görev")
         details_list.heading("Durum", text="Durum")
         details_list.pack(fill=tk.BOTH, expand=True, pady=10)
 
+        # Veritabanından gelen görevleri Treeview'a ekle
         for task in tasks:
             details_list.insert("", tk.END, values=task)
 
@@ -185,3 +198,4 @@ def open_employee_window():
     employee_list.pack(fill=tk.BOTH, expand=True, pady=10)
 
     refresh_employee_list()
+
