@@ -1,51 +1,39 @@
+
+
 import tkinter as tk
-from ui.project_window import ProjectWindow
-from ui.task_window import TaskWindow
-from ui.employee_window import EmployeeWindow
-from database.db_connection import DBConnection
-from database.queries import Queries
+from tkinter import ttk
+from tkinter import messagebox
+from ui.project_window import open_project_window
+from ui.employee_window import open_employee_window
+from ui.task_window import open_task_window
+from ui.main_window import main_window
+#from ui.details_window import open_details_window
+from database.queries import create_database
+ 
+def main_window():
+    # Ana pencereyi oluştur
+    root = tk.Tk()
+    root.title("Proje Yönetim Uygulaması")
+    root.geometry("600x400")
 
-def initialize_database():
-    """Create tables if they do not exist."""
-    db = DBConnection()
-    db.connect()
-    try:
-        for query in Queries.create_tables():
-            db.execute_query(query)
-        print("Database initialized successfully.")
-    except Exception as e:
-        print(f"Error initializing database: {e}")
-    finally:
-        db.close()
+    # Başlık
+    ttk.Label(root, text="Proje Yönetim Sistemi", font=("Arial", 18)).pack(pady=20)
 
-class MainApplication(tk.Tk):
-    def __init__(self):
-        super().__init__()
-        self.title("Proje Yönetim Sistemi")
-        self.geometry("600x400")
-        self.create_widgets()
+    # Butonlar
+    ttk.Button(root, text="Proje Yönetimi", command=open_project_window).pack(pady=10)
+    ttk.Button(root, text="Çalışan Yönetimi", command=open_employee_window).pack(pady=10)
+    ttk.Button(root, text="Görev Yönetimi", command=open_task_window).pack(pady=10)
+    #ttk.Button(root, text="Detay Raporları", command=open_details_window).pack(pady=10)
 
-    def create_widgets(self):
-        tk.Label(self, text="Proje Yönetim Sistemi", font=("Arial", 16)).pack(pady=20)
+    # Çıkış butonu
+    ttk.Button(root, text="Çıkış", command=root.quit).pack(pady=20)
 
-        tk.Button(self, text="Projeler", command=self.open_project_window, width=20).pack(pady=10)
-        tk.Button(self, text="Görevler", command=self.open_task_window, width=20).pack(pady=10)
-        tk.Button(self, text="Çalışanlar", command=self.open_employee_window, width=20).pack(pady=10)
-        tk.Button(self, text="Çıkış", command=self.quit, width=20).pack(pady=20)
-
-    def open_project_window(self):
-        self.withdraw()  # Hide the main window
-        ProjectWindow(self)  # Open the ProjectWindow
-
-    def open_task_window(self):
-        self.withdraw()
-        TaskWindow(self)
-
-    def open_employee_window(self):
-        self.withdraw()
-        EmployeeWindow(self)
+    # Ana pencereyi başlat
+    root.mainloop()
 
 if __name__ == "__main__":
-    initialize_database()
-    app = MainApplication()
-    app.mainloop()
+    # Veritabanını oluştur
+    create_database()
+
+    # Ana pencereyi başlat
+    main_window()

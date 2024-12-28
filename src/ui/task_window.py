@@ -1,215 +1,298 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import sqlite3
 from datetime import datetime
-import mysql.connector
 
-# Veritabanı bağlantısı ve tablo oluşturma
-conn = mysql.connector.connect(
-    host="localhost",
-    user="root",  # MySQL kullanıcı adınız
-    password="2468",  # MySQL şifreniz
-    database="project_management"  # Kullanılacak veritabanı
-)
-cursor = conn.cursor()
+def open_task_window():
+    def update_project_end_date_and_delay(project_id):
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
 
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS tasks (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    task_name VARCHAR(255) NOT NULL,
-    assigned_to VARCHAR(255) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    man_days INT NOT NULL,
-    status ENUM('Tamamlanacak', 'Devam Ediyor', 'Tamamlandı') NOT NULL,
-    delay_days INT DEFAULT 0
-)
-''')
-conn.commit()
+        # En son bitiş tarihini al
+        cursor.execute("""
+            SELECT MAX(end_date) FROM tasks WHERE project_id = ?
+        """, (project_id,))
+        max_end_date = cursor.fetchone()[0]
 
-class TaskWindow(tk.Toplevel):
-    def __init__(self, master, previous_window=None):
-        super().__init__(master)
+        # Bitiş tarihi geçti mi kontrol et
+        if max_end_date:
+            current_date = datetime.now().date()
 
-        self.title("Görev Detayları")
-        self.geometry("800x600")
-        self.resizable(False, False)
+            # Eğer proje bitiş tarihi geçmişse, gecikmeyi hesapla
+            if max_end_date < current_date:
+                delay_days = (current_date - datetime.strptime(max_end_date, "%Y-%m-%d").date()).days
 
-        self.previous_window = previous_window
+                # Gecikmeyi projeye dahil et
+                cursor.execute("""
+                    UPDATE projects
+                    SET end_date = ?, status = 'Devam Ediyor', delay_days = ?
+                    WHERE id = ?
+                """, (max_end_date, delay_days, project_id))
+            else:
+                cursor.execute("""
+                    UPDATE projects
+                    SET end_date = ?, status = 'Tamamlanacak', delay_days = 0
+                    WHERE id = ?
+                """, (max_end_date, project_id))
 
-        # Görev bilgileri için değişkenler
-        self.task_name = tk.StringVar()
-        self.assigned_to = tk.StringVar()
-        self.start_date = tk.StringVar()
-        self.end_date = tk.StringVar()
-        self.man_days = tk.IntVar()
-        self.status = tk.StringVar(value="Tamamlanacak")
-        self.delay_days = tk.IntVar(value=0)
+            connection.commit()
 
-        # Başlık etiketi
-        header_label = tk.Label(self, text="Görev Detayları", font=("Arial", 20))
-        header_label.pack(pady=10)
+        connection.close()
 
-        # Görev tablosu
-        self.tree = ttk.Treeview(self, columns=("ID", "Adı", "Atanan", "Başlangıç", "Bitiş", "Adam/Gün", "Durum", "Gecikme"), show="headings")
-        self.tree.pack(fill=tk.BOTH, expand=True, pady=10)
+    def add_task_window():
+        def save_task():
+            project_id = project_combobox.get().split(" - ")[0]
+            employee_id = employee_combobox.get().split(" - ")[0]
+            task_name = task_name_entry.get()
+            start_date = start_date_entry.get()
+            end_date = end_date_entry.get()
+            status = status_combobox.get()
+            man_days = int(man_days_entry.get())  # Adam-gün hesaplama
 
-        for col in self.tree["columns"]:
-            self.tree.heading(col, text=col)
-
-        # Düğmeler
-        button_frame = tk.Frame(self)
-        button_frame.pack(pady=10)
-
-        ttk.Button(button_frame, text="Görev Ekle", command=self.show_task_form).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Görev Sil", command=self.delete_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Görev Düzenle", command=self.edit_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Kaydet", command=self.save_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Geri Dön", command=self.go_back).pack(side=tk.LEFT, padx=5)
-
-        self.load_tasks()
-
-        # Görev bilgileri giriş çerçevesi (Başlangıçta gizli)
-        self.info_frame = ttk.LabelFrame(self, text="Görev Bilgileri")
-
-        ttk.Label(self.info_frame, text="Görev Adı:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(self.info_frame, textvariable=self.task_name, width=30).grid(row=0, column=1, padx=5, pady=5)
-
-        ttk.Label(self.info_frame, text="Atanan Kişi:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(self.info_frame, textvariable=self.assigned_to, width=30).grid(row=1, column=1, padx=5, pady=5)
-
-        ttk.Label(self.info_frame, text="Başlangıç Tarihi (YYYY-MM-DD):").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(self.info_frame, textvariable=self.start_date, width=15).grid(row=2, column=1, padx=5, pady=5)
-
-        ttk.Label(self.info_frame, text="Bitiş Tarihi (YYYY-MM-DD):").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(self.info_frame, textvariable=self.end_date, width=15).grid(row=3, column=1, padx=5, pady=5)
-
-        ttk.Label(self.info_frame, text="Adam/Gün:").grid(row=4, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(self.info_frame, textvariable=self.man_days, width=10).grid(row=4, column=1, padx=5, pady=5)
-
-        ttk.Label(self.info_frame, text="Durum:").grid(row=5, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Combobox(self.info_frame, textvariable=self.status, values=["Tamamlanacak", "Devam Ediyor", "Tamamlandı"], width=15).grid(row=5, column=1, padx=5, pady=5)
-
-        ttk.Label(self.info_frame, text="Gecikme Gün Sayısı:").grid(row=6, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(self.info_frame, textvariable=self.delay_days, width=10, state="readonly").grid(row=6, column=1, padx=5, pady=5)
-
-        save_button_frame = tk.Frame(self.info_frame)
-        save_button_frame.grid(row=7, columnspan=2, pady=10)
-
-        ttk.Button(save_button_frame, text="Görev Kaydet", command=self.save_task).pack(side=tk.LEFT, padx=5)
-        ttk.Button(save_button_frame, text="İptal", command=self.cancel_task_form).pack(side=tk.LEFT, padx=5)
-
-    def load_tasks(self):
-        """Veritabanından görevleri yükler ve ağaç yapısına ekler."""
-        self.tree.delete(*self.tree.get_children())
-        query = "SELECT * FROM tasks"
-        cursor.execute(query)
-        rows = cursor.fetchall()
-
-        for row in rows:
-            self.tree.insert("", tk.END, values=row)
-
-    def show_task_form(self):
-        """Görev ekleme/düzenleme formunu gösterir."""
-        self.info_frame.pack(fill=tk.BOTH, padx=10, pady=10)
-
-    def cancel_task_form(self):
-        """Görev ekleme/düzenleme formunu gizler."""
-        self.info_frame.pack_forget()
-
-    def save_task(self):
-        """Görevi veritabanına kaydeder."""
-        try:
-            task_name = self.task_name.get()
-            assigned_to = self.assigned_to.get()
-            start_date = datetime.strptime(self.start_date.get(), "%Y-%m-%d").date()
-            end_date = datetime.strptime(self.end_date.get(), "%Y-%m-%d").date()
-            man_days = self.man_days.get()
-            status = self.status.get()
-
-            if not task_name or not assigned_to:
-                messagebox.showwarning("Uyarı", "Tüm alanları doldurmalısınız.")
+            if not project_id or not employee_id or not task_name or not start_date or not end_date or not man_days:
+                messagebox.showerror("Hata", "Tüm alanları doldurunuz.")
                 return
 
-            # Gecikme gün sayısını hesapla
-            delay_days = max((datetime.now().date() - end_date).days, 0) if status == "Tamamlandı" else 0
+            connection = sqlite3.connect("project_management.db")
+            cursor = connection.cursor()
 
-            query = """
-                INSERT INTO tasks (task_name, assigned_to, start_date, end_date, man_days, status, delay_days)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (task_name, assigned_to, start_date, end_date, man_days, status, delay_days))
-            conn.commit()
+            cursor.execute("""
+                INSERT INTO tasks (project_id, employee_id, name, start_date, end_date, status, man_days)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (project_id, employee_id, task_name, start_date, end_date, status, man_days))
 
-            self.load_tasks()
-            messagebox.showinfo("Başarılı", "Görev kaydedildi.")
-            self.cancel_task_form()
-        except Exception as e:
-            messagebox.showerror("Hata", f"Görev kaydedilirken bir hata oluştu: {e}")
+            connection.commit()
 
-    def delete_task(self):
-        """Seçili görevi veritabanından siler."""
-        try:
-            selected_item = self.tree.selection()
-            if not selected_item:
-                messagebox.showwarning("Uyarı", "Silmek için bir görev seçmelisiniz.")
+            # Proje bitiş tarihini ve gecikmeyi güncelleme
+            update_project_end_date_and_delay(project_id)
+
+            connection.close()
+
+            messagebox.showinfo("Başarılı", "Görev eklendi.")
+            refresh_task_list()
+            add_window.destroy()
+
+        add_window = tk.Toplevel(task_window)
+        add_window.title("Görev Ekle")
+        add_window.geometry("400x450")
+
+        ttk.Label(add_window, text="Proje:").pack(pady=5)
+        project_combobox = ttk.Combobox(add_window)
+        project_combobox.pack(pady=5)
+
+        ttk.Label(add_window, text="Çalışan:").pack(pady=5)
+        employee_combobox = ttk.Combobox(add_window)
+        employee_combobox.pack(pady=5)
+
+        ttk.Label(add_window, text="Görev Adı:").pack(pady=5)
+        task_name_entry = ttk.Entry(add_window)
+        task_name_entry.pack(pady=5)
+
+        ttk.Label(add_window, text="Başlangıç Tarihi (YYYY-MM-DD):").pack(pady=5)
+        start_date_entry = ttk.Entry(add_window)
+        start_date_entry.pack(pady=5)
+
+        ttk.Label(add_window, text="Bitiş Tarihi (YYYY-MM-DD):").pack(pady=5)
+        end_date_entry = ttk.Entry(add_window)
+        end_date_entry.pack(pady=5)
+
+        ttk.Label(add_window, text="Durum:").pack(pady=5)
+        status_combobox = ttk.Combobox(add_window, values=["Tamamlanacak", "Devam Ediyor", "Tamamlandı"])
+        status_combobox.pack(pady=5)
+
+        ttk.Label(add_window, text="Adam-Gün:").pack(pady=5)
+        man_days_entry = ttk.Entry(add_window)
+        man_days_entry.pack(pady=5)
+
+        ttk.Button(add_window, text="Kaydet", command=save_task).pack(pady=10)
+
+        # Proje ve çalışanları yükleme
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT id, name FROM projects")
+        projects = cursor.fetchall()
+        project_combobox["values"] = [f"{proj[0]} - {proj[1]}" for proj in projects]
+
+        cursor.execute("SELECT id, name FROM employees")
+        employees = cursor.fetchall()
+        employee_combobox["values"] = [f"{emp[0]} - {emp[1]}" for emp in employees]
+
+        connection.close()
+
+    def delete_task():
+        selected_item = task_list.selection()
+        if not selected_item:
+            messagebox.showerror("Hata", "Silmek için bir görev seçin.")
+            return
+
+        task_id = task_list.item(selected_item, "values")[0]
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
+
+        cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        connection.commit()
+        connection.close()
+
+        messagebox.showinfo("Başarılı", "Görev silindi.")
+        refresh_task_list()
+
+    def edit_task():
+        selected_item = task_list.selection()
+        if not selected_item:
+            messagebox.showerror("Hata", "Düzenlemek için bir görev seçin.")
+            return
+
+        task_id = task_list.item(selected_item, "values")[0]
+
+        # Düzenleme için pencere açma
+        edit_window = tk.Toplevel(task_window)
+        edit_window.title("Görev Düzenle")
+        edit_window.geometry("400x450")
+
+        # Mevcut görevi al
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT project_id, employee_id, name, start_date, end_date, status, man_days
+            FROM tasks WHERE id = ?
+        """, (task_id,))
+        task_data = cursor.fetchone()
+
+        if not task_data:
+            messagebox.showerror("Hata", "Görev bulunamadı.")
+            return
+
+        connection.close()
+
+        ttk.Label(edit_window, text="Proje:").pack(pady=5)
+        project_combobox = ttk.Combobox(edit_window)
+        project_combobox.pack(pady=5)
+
+        ttk.Label(edit_window, text="Çalışan:").pack(pady=5)
+        employee_combobox = ttk.Combobox(edit_window)
+        employee_combobox.pack(pady=5)
+
+        ttk.Label(edit_window, text="Görev Adı:").pack(pady=5)
+        task_name_entry = ttk.Entry(edit_window)
+        task_name_entry.pack(pady=5)
+
+        ttk.Label(edit_window, text="Başlangıç Tarihi (YYYY-MM-DD):").pack(pady=5)
+        start_date_entry = ttk.Entry(edit_window)
+        start_date_entry.pack(pady=5)
+
+        ttk.Label(edit_window, text="Bitiş Tarihi (YYYY-MM-DD):").pack(pady=5)
+        end_date_entry = ttk.Entry(edit_window)
+        end_date_entry.pack(pady=5)
+
+        ttk.Label(edit_window, text="Durum:").pack(pady=5)
+        status_combobox = ttk.Combobox(edit_window, values=["Tamamlanacak", "Devam Ediyor", "Tamamlandı"])
+        status_combobox.pack(pady=5)
+
+        ttk.Label(edit_window, text="Adam-Gün:").pack(pady=5)
+        man_days_entry = ttk.Entry(edit_window)
+        man_days_entry.pack(pady=5)
+
+        # Proje ve çalışanları yükle
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT id, name FROM projects")
+        projects = cursor.fetchall()
+        project_combobox["values"] = [f"{proj[0]} - {proj[1]}" for proj in projects]
+
+        cursor.execute("SELECT id, name FROM employees")
+        employees = cursor.fetchall()
+        employee_combobox["values"] = [f"{emp[0]} - {emp[1]}" for emp in employees]
+
+        connection.close()
+
+        # Mevcut verileri giriş alanlarına yerleştirme
+        project_combobox.set(f"{task_data[0]}")
+        employee_combobox.set(f"{task_data[1]}")
+        task_name_entry.insert(0, task_data[2])
+        start_date_entry.insert(0, task_data[3])
+        end_date_entry.insert(0, task_data[4])
+        status_combobox.set(task_data[5])
+        man_days_entry.insert(0, task_data[6])
+
+        def save_edited_task():
+            new_project_id = project_combobox.get().split(" - ")[0]
+            new_employee_id = employee_combobox.get().split(" - ")[0]
+            new_task_name = task_name_entry.get()
+            new_start_date = start_date_entry.get()
+            new_end_date = end_date_entry.get()
+            new_status = status_combobox.get()
+            new_man_days = int(man_days_entry.get())  # Adam-gün
+
+            if not new_project_id or not new_employee_id or not new_task_name or not new_start_date or not new_end_date or not new_man_days:
+                messagebox.showerror("Hata", "Tüm alanları doldurunuz.")
                 return
 
-            task_id = self.tree.item(selected_item)["values"][0]
-            query = "DELETE FROM tasks WHERE id = %s"
-            cursor.execute(query, (task_id,))
-            conn.commit()
+            connection = sqlite3.connect("project_management.db")
+            cursor = connection.cursor()
 
-            self.load_tasks()
-            messagebox.showinfo("Başarılı", "Görev silindi.")
-        except Exception as e:
-            messagebox.showerror("Hata", f"Görev silinirken bir hata oluştu: {e}")
+            cursor.execute("""
+                UPDATE tasks
+                SET project_id = ?, employee_id = ?, name = ?, start_date = ?, end_date = ?, status = ?, man_days = ?
+                WHERE id = ?
+            """, (new_project_id, new_employee_id, new_task_name, new_start_date, new_end_date, new_status, new_man_days, task_id))
 
-    def edit_task(self):
-        """Seçili görevi düzenlemek için formu doldurur."""
-        try:
-            selected_item = self.tree.selection()
-            if not selected_item:
-                messagebox.showwarning("Uyarı", "Düzenlemek için bir görev seçmelisiniz.")
-                return
+            connection.commit()
 
-            task_data = self.tree.item(selected_item)["values"]
+            # Proje bitiş tarihini ve gecikmeyi güncelleme
+            update_project_end_date_and_delay(new_project_id)
 
-            self.task_name.set(task_data[1])
-            self.assigned_to.set(task_data[2])
-            self.start_date.set(task_data[3])
-            self.end_date.set(task_data[4])
-            self.man_days.set(task_data[5])
-            self.status.set(task_data[6])
-            self.delay_days.set(task_data[7])
+            connection.close()
 
-            self.show_task_form()
-        except Exception as e:
-            messagebox.showerror("Hata", f"Görev düzenlenirken bir hata oluştu: {e}")
+            messagebox.showinfo("Başarılı", "Görev düzenlendi.")
+            refresh_task_list()
+            edit_window.destroy()
 
-    def go_back(self):
-        """Bir önceki pencereye geri döner."""
-        if self.previous_window:
-            self.destroy()
-            self.previous_window.deiconify()
-        else:
-            self.destroy()
+        ttk.Button(edit_window, text="Kaydet", command=save_edited_task).pack(pady=10)
 
+    def refresh_task_list():
+        for row in task_list.get_children():
+            task_list.delete(row)
 
-# Ana program
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("Proje Yönetim Sistemi")
-    root.geometry("400x300")
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
 
-    def open_task_window():
-        """Görev penceresini açar."""
-        root.withdraw()
-        TaskWindow(root)
+        cursor.execute("""
+            SELECT tasks.id, projects.name, employees.name, tasks.name, tasks.start_date, tasks.end_date, tasks.status, tasks.man_days, projects.delay_days
+            FROM tasks
+            JOIN projects ON tasks.project_id = projects.id
+            JOIN employees ON tasks.employee_id = employees.id
+        """)
 
-    ttk.Button(root, text="Görevleri Yönet", command=open_task_window).pack(pady=20)
+        for row in cursor.fetchall():
+            task_list.insert("", tk.END, values=row)
 
-    root.mainloop()
+        connection.close()
 
-    # Veritabanı bağlantısını kapat
-    conn.close()
+    def go_back():
+        task_window.destroy()
 
+    task_window = tk.Toplevel()
+    task_window.title("Görev Yönetimi")
+    task_window.geometry("900x600")
+
+    ttk.Button(task_window, text="Görev Ekle", command=add_task_window).pack(pady=10)
+    ttk.Button(task_window, text="Görev Düzenle", command=edit_task).pack(pady=5)
+    ttk.Button(task_window, text="Görev Sil", command=delete_task).pack(pady=5)
+    ttk.Button(task_window, text="Geri Dön", command=go_back).pack(pady=10)
+
+    task_list = ttk.Treeview(task_window, columns=("ID", "Proje", "Çalışan", "Görev", "Başlangıç", "Bitiş", "Durum", "Adam-Gün", "Gecikme Gün"), show="headings")
+    task_list.heading("ID", text="ID")
+    task_list.heading("Proje", text="Proje")
+    task_list.heading("Çalışan", text="Çalışan")
+    task_list.heading("Görev", text="Görev")
+    task_list.heading("Başlangıç", text="Başlangıç Tarihi")
+    task_list.heading("Bitiş", text="Bitiş Tarihi")
+    task_list.heading("Durum", text="Durum")
+    task_list.heading("Adam-Gün", text="Adam-Gün")
+    task_list.heading("Gecikme Gün", text="Gecikme Gün")
+    task_list.pack(fill=tk.BOTH, expand=True, pady=10)
+
+    refresh_task_list()

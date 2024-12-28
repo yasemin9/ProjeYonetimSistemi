@@ -1,79 +1,92 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import sqlite3
 
-class MainWindow(tk.Tk):
-    def __init__(self):
-        super().__init__()
+def main_window():
+    def open_project_window():
+        project_window = tk.Toplevel(root)
+        project_window.title("Proje Yönetimi")
+        project_window.geometry("400x300")
 
-        # Ana pencere ayarları
-        self.title("Proje Yönetim Sistemi")
-        self.geometry("800x600")
-        self.resizable(False, False)
+        ttk.Label(project_window, text="Proje Adı:").pack(pady=5)
+        project_name_entry = ttk.Entry(project_window)
+        project_name_entry.pack(pady=5)
 
-        # Başlık kısmı
-        header_label = tk.Label(self, text="Proje Yönetim Sistemi", font=("Arial", 24), bg="blue", fg="white")
-        header_label.pack(fill=tk.X)
+        ttk.Label(project_window, text="Başlangıç Tarihi (YYYY-MM-DD):").pack(pady=5)
+        start_date_entry = ttk.Entry(project_window)
+        start_date_entry.pack(pady=5)
 
-        # Proje listesi çerçevesi
-        self.project_frame = ttk.LabelFrame(self, text="Projeler")
-        self.project_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        ttk.Label(project_window, text="Bitiş Tarihi (YYYY-MM-DD):").pack(pady=5)
+        end_date_entry = ttk.Entry(project_window)
+        end_date_entry.pack(pady=5)
 
-        self.project_listbox = tk.Listbox(self.project_frame, height=15, font=("Arial", 12))
-        self.project_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
+        def add_project():
+            name = project_name_entry.get()
+            start_date = start_date_entry.get()
+            end_date = end_date_entry.get()
 
-        scrollbar = tk.Scrollbar(self.project_frame, orient=tk.VERTICAL, command=self.project_listbox.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.project_listbox.config(yscrollcommand=scrollbar.set)
+            if not name or not start_date or not end_date:
+                messagebox.showerror("Hata", "Tüm alanları doldurunuz.")
+                return
 
-        # Alt kısımda düğmeler
-        button_frame = tk.Frame(self)
-        button_frame.pack(fill=tk.X, padx=10, pady=10)
+            connection = sqlite3.connect("project_management.db")
+            cursor = connection.cursor()
 
-        add_project_btn = ttk.Button(button_frame, text="Yeni Proje Ekle", command=self.add_project)
-        add_project_btn.pack(side=tk.LEFT, padx=5)
+            cursor.execute("INSERT INTO projects (name, start_date, end_date) VALUES (?, ?, ?)",
+                           (name, start_date, end_date))
 
-        view_project_btn = ttk.Button(button_frame, text="Projeyi Görüntüle", command=self.view_project)
-        view_project_btn.pack(side=tk.LEFT, padx=5)
+            connection.commit()
+            connection.close()
 
-        delete_project_btn = ttk.Button(button_frame, text="Projeyi Sil", command=self.delete_project)
-        delete_project_btn.pack(side=tk.LEFT, padx=5)
+            messagebox.showinfo("Başarılı", "Proje eklendi.")
+            project_window.destroy()
 
-        # Placeholder projeler
-        self.projects = []
-        self.load_projects()
+        ttk.Button(project_window, text="Proje Ekle", command=add_project).pack(pady=20)
 
-    def load_projects(self):
-        # Placeholder veriler, daha sonra veritabanından alınacak
-        self.projects = ["Proje 1", "Proje 2", "Proje 3"]
-        for project in self.projects:
-            self.project_listbox.insert(tk.END, project)
+    def open_employee_window():
+        employee_window = tk.Toplevel(root)
+        employee_window.title("Çalışan Yönetimi")
+        employee_window.geometry("400x300")
 
-    def add_project(self):
-        new_project = tk.simpledialog.askstring("Yeni Proje", "Proje adını girin:")
-        if new_project:
-            self.projects.append(new_project)
-            self.project_listbox.insert(tk.END, new_project)
-            messagebox.showinfo("Başarılı", f"'{new_project}' projesi eklendi!")
+        ttk.Label(employee_window, text="Çalışan Adı:").pack(pady=5)
+        employee_name_entry = ttk.Entry(employee_window)
+        employee_name_entry.pack(pady=5)
 
-    def view_project(self):
-        selected = self.project_listbox.curselection()
-        if not selected:
-            messagebox.showwarning("Hata", "Lütfen bir proje seçin!")
-            return
-        project_name = self.project_listbox.get(selected)
-        messagebox.showinfo("Proje Detayı", f"Seçilen proje: {project_name}")
+        ttk.Label(employee_window, text="Pozisyon:").pack(pady=5)
+        position_entry = ttk.Entry(employee_window)
+        position_entry.pack(pady=5)
 
-    def delete_project(self):
-        selected = self.project_listbox.curselection()
-        if not selected:
-            messagebox.showwarning("Hata", "Lütfen bir proje seçin!")
-            return
-        project_name = self.project_listbox.get(selected)
-        if messagebox.askyesno("Emin misiniz?", f"'{project_name}' projesini silmek istediğinizden emin misiniz?"):
-            self.project_listbox.delete(selected)
-            self.projects.remove(project_name)
-            messagebox.showinfo("Başarılı", f"'{project_name}' projesi silindi!")
+        def add_employee():
+            name = employee_name_entry.get()
+            position = position_entry.get()
+
+            if not name or not position:
+                messagebox.showerror("Hata", "Tüm alanları doldurunuz.")
+                return
+
+            connection = sqlite3.connect("project_management.db")
+            cursor = connection.cursor()
+
+            cursor.execute("INSERT INTO employees (name, position) VALUES (?, ?)", (name, position))
+
+            connection.commit()
+            connection.close()
+
+            messagebox.showinfo("Başarılı", "Çalışan eklendi.")
+            employee_window.destroy()
+
+        ttk.Button(employee_window, text="Çalışan Ekle", command=add_employee).pack(pady=20)
+
+    root = tk.Tk()
+    root.title("Proje Yönetim Uygulaması")
+    root.geometry("500x400")
+
+    ttk.Label(root, text="Proje Yönetim Sistemi", font=("Arial", 16)).pack(pady=20)
+
+    ttk.Button(root, text="Proje Yönetimi", command=open_project_window).pack(pady=10)
+    ttk.Button(root, text="Çalışan Yönetimi", command=open_employee_window).pack(pady=10)
+
+    root.mainloop()
 
 if __name__ == "__main__":
-    app = MainWindow()
-    app.mainloop()
+    main_window()

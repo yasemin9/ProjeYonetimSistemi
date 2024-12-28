@@ -1,51 +1,88 @@
-import mysql.connector
-from mysql.connector import Error
+import sqlite3
 
-class DBConnection:
-    def __init__(self, host='localhost', database='project_management', user='root', password='2468'):
-        self.host = host
-        self.database = database
-        self.user = user
-        self.password = password
+class DatabaseConnection:
+    """
+    SQLite veritabanı bağlantısını kolaylaştırmak için bir sınıf.
+    """
+    def __init__(self, db_name="project_management.db"):
+        self.db_name = db_name
         self.connection = None
+        self.cursor = None
 
     def connect(self):
-        try:
-            self.connection = mysql.connector.connect(
-                host=self.host,
-                database=self.database,
-                user=self.user,
-                password=self.password
-            )
-            if self.connection.is_connected():
-                print(f"Connected to the database {self.database}")
-        except Error as e:
-            print(f"Error: {e}")
-            self.connection = None
+        """
+        Veritabanına bağlanır ve imleci oluşturur.
+        """
+        self.connection = sqlite3.connect(self.db_name)
+        self.cursor = self.connection.cursor()
 
-    def execute_query(self, query, params=None):
+    def execute_query(self, query, parameters=()):
+        """
+        Veritabanında bir sorgu çalıştırır.
+        """
         if self.connection is None:
-            raise ConnectionError("Database connection is not established.")
-        try:
-            cursor = self.connection.cursor()
-            cursor.execute(query, params)
+            self.connect()
+        self.cursor.execute(query, parameters)
+
+    def fetch_all(self):
+        """
+        Çalıştırılan sorgunun tüm sonuçlarını döndürür.
+        """
+        return self.cursor.fetchall()
+
+    def fetch_one(self):
+        """
+        Çalıştırılan sorgunun tek bir sonucunu döndürür.
+        """
+        return self.cursor.fetchone()
+
+    def commit(self):
+        """
+        Değişiklikleri veritabanına yazar.
+        """
+        if self.connection:
             self.connection.commit()
-            print("Query executed successfully.")
-        except Error as e:
-            print(f"Error: {e}")
-
-    def fetch_all(self, query, params=None):
-        if self.connection is None:
-            raise ConnectionError("Database connection is not established.")
-        try:
-            cursor = self.connection.cursor(dictionary=True)
-            cursor.execute(query, params)
-            return cursor.fetchall()
-        except Error as e:
-            print(f"Error: {e}")
-            return []
 
     def close(self):
-        if self.connection and self.connection.is_connected():
+        """
+        Veritabanı bağlantısını kapatır.
+        """
+        if self.connection:
             self.connection.close()
-            print("Database connection closed.")
+            self.connection = None
+            self.cursor = None
+
+    def __enter__(self):
+        """
+        Bağlam yöneticisi desteği için giriş metodu.
+        """
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Bağlam yöneticisi desteği için çıkış metodu.
+        """
+        self.commit()
+        self.close()
+
+# Örnek Kullanım:
+if __name__ == "__main__":
+    with DatabaseConnection() as db:
+        # Veritabanında bir tablo oluştur
+        db.execute_query("""
+            CREATE TABLE IF NOT EXISTS test_table (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL
+            )
+        """)
+        db.commit()
+
+        # Veri ekle
+        db.execute_query("INSERT INTO test_table (name) VALUES (?)", ("Test",))
+        db.commit()
+
+        # Veri oku
+        db.execute_query("SELECT * FROM test_table")
+        results = db.fetch_all()
+        print("Kayıtlar:", results)

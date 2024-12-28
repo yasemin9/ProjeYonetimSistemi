@@ -1,320 +1,187 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from mysql.connector import connect, Error
+import sqlite3
 
-class EmployeeWindow(tk.Toplevel):
-    def __init__(self, master=None):
-        super().__init__(master)
+def open_employee_window():
+    def add_employee():
+        name = employee_name_entry.get()
+        position = position_entry.get()
 
-        self.title("Çalışan Yönetim Sistemi")
-        self.geometry("700x500")
-        self.resizable(False, False)
-
-        # Başlık
-        header_label = tk.Label(self, text="Çalışan Yönetim Sistemi", font=("Arial", 18))
-        header_label.pack(pady=10)
-
-        # Çalışanlar Çerçevesi
-        employee_frame = ttk.LabelFrame(self, text="Çalışanlar")
-        employee_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        self.employee_tree = ttk.Treeview(
-            employee_frame, columns=("ID", "Ad", "Soyad", "Pozisyon"), show="headings"
-        )
-        self.employee_tree.heading("ID", text="ID")
-        self.employee_tree.heading("Ad", text="Ad")
-        self.employee_tree.heading("Soyad", text="Soyad")
-        self.employee_tree.heading("Pozisyon", text="Pozisyon")
-
-        self.employee_tree.column("ID", width=50, anchor=tk.CENTER)
-        self.employee_tree.column("Ad", width=200)
-        self.employee_tree.column("Soyad", width=200)
-        self.employee_tree.column("Pozisyon", width=150)
-
-        self.employee_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
-
-        scrollbar = ttk.Scrollbar(employee_frame, orient=tk.VERTICAL, command=self.employee_tree.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.employee_tree.config(yscrollcommand=scrollbar.set)
-
-        # Çalışanları Yükleme
-        self.load_employees()
-
-        # Düğme Çerçevesi
-        button_frame = tk.Frame(self)
-        button_frame.pack(fill=tk.X, padx=10, pady=10)
-
-        ttk.Button(button_frame, text="Çalışan Ekle", command=self.add_employee).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Çalışan Güncelle", command=self.update_employee).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Çalışan Sil", command=self.delete_employee).pack(side=tk.LEFT, padx=5)
-
-    def load_employees(self):
-        """Veritabanından çalışanları yükler."""
-        for row in self.employee_tree.get_children():
-            self.employee_tree.delete(row)
-
-        try:
-            connection = connect(
-                host="localhost", database="project_management", user="root", password="2468"
-            )
-            cursor = connection.cursor()
-            cursor.execute("SELECT * FROM employees")
-            employees = cursor.fetchall()
-            for employee in employees:
-                self.employee_tree.insert("", tk.END, values=employee)
-        except Error as e:
-            print(f"Veritabanı Hatası: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-
-    def add_employee(self):
-        """Yeni bir çalışan eklemek için bir pencere açar."""
-        EmployeeForm(self, "Ekle", self.load_employees)
-
-    def update_employee(self):
-        """Seçilen çalışanı güncellemek için bir pencere açar."""
-        selected = self.employee_tree.selection()
-        if not selected:
-            messagebox.showwarning("Hata", "Güncellemek için bir çalışan seçin!")
+        if not name or not position:
+            messagebox.showerror("Hata", "Tüm alanları doldurunuz.")
             return
 
-        employee_id = self.employee_tree.item(selected[0], "values")[0]
-        EmployeeForm(self, "Güncelle", self.load_employees, employee_id)
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
 
-    def delete_employee(self):
-        """Seçilen çalışanı siler."""
-        selected = self.employee_tree.selection()
-        if not selected:
-            messagebox.showwarning("Hata", "Silmek için bir çalışan seçin!")
+        cursor.execute("INSERT INTO employees (name, position) VALUES (?, ?)", (name, position))
+
+        connection.commit()
+        connection.close()
+
+        messagebox.showinfo("Başarılı", "Çalışan eklendi.")
+        refresh_employee_list()
+        hide_employee_form()
+
+    def delete_employee():
+        selected_item = employee_list.selection()
+        if not selected_item:
+            messagebox.showerror("Hata", "Silmek için bir çalışan seçiniz.")
             return
 
-        employee_id = self.employee_tree.item(selected[0], "values")[0]
+        employee_id = employee_list.item(selected_item)["values"][0]
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
 
-        confirm = messagebox.askyesno("Emin misiniz?", "Çalışanı silmek istediğinizden emin misiniz?")
-        if not confirm:
+        cursor.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
+        connection.commit()
+        connection.close()
+
+        messagebox.showinfo("Başarılı", "Çalışan silindi.")
+        refresh_employee_list()
+
+    def edit_employee():
+        selected_item = employee_list.selection()
+        if not selected_item:
+            messagebox.showerror("Hata", "Düzenlemek için bir çalışan seçiniz.")
             return
 
-        try:
-            connection = connect(
-                host="localhost", database="project_management", user="root", password="2468"
-            )
-            cursor = connection.cursor()
-            cursor.execute("DELETE FROM employees WHERE id = %s", (employee_id,))
-            connection.commit()
-            messagebox.showinfo("Başarılı", "Çalışan başarıyla silindi!")
-            self.employee_tree.delete(selected[0])
-        except Error as e:
-            print(f"Veritabanı Hatası: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
+        employee_id = employee_list.item(selected_item)["values"][0]
+        employee_name = employee_list.item(selected_item)["values"][1]
+        position = employee_list.item(selected_item)["values"][2]
 
-class EmployeeForm(tk.Toplevel):
-    def __init__(self, master, action, reload_callback, employee_id=None):
-        super().__init__(master)
+        def save_edited_employee():
+            new_name = new_employee_name_entry.get()
+            new_position = new_position_entry.get()
 
-        self.title(f"Çalışan {action}")
-        self.geometry("400x300")
-        self.resizable(False, False)
+            if not new_name or not new_position:
+                messagebox.showerror("Hata", "Tüm alanları doldurunuz.")
+                return
 
-        self.reload_callback = reload_callback
-        self.employee_id = employee_id
-
-        # Çalışan Bilgileri
-        self.first_name = tk.StringVar()
-        self.last_name = tk.StringVar()
-        self.position = tk.StringVar()
-
-        if employee_id:
-            self.load_employee_data()
-
-        tk.Label(self, text=f"Çalışan {action}", font=("Arial", 16)).pack(pady=10)
-
-        form_frame = ttk.Frame(self)
-        form_frame.pack(pady=10, padx=20)
-
-        ttk.Label(form_frame, text="Ad:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(form_frame, textvariable=self.first_name).grid(row=0, column=1, padx=5, pady=5)
-
-        ttk.Label(form_frame, text="Soyad:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(form_frame, textvariable=self.last_name).grid(row=1, column=1, padx=5, pady=5)
-
-        ttk.Label(form_frame, text="Pozisyon:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        ttk.Entry(form_frame, textvariable=self.position).grid(row=2, column=1, padx=5, pady=5)
-
-        ttk.Button(self, text="Kaydet", command=self.save_employee).pack(pady=20)
-
-    def load_employee_data(self):
-        """Veritabanından seçili çalışanın bilgilerini yükler."""
-        try:
-            connection = connect(
-                host="localhost", database="project_management", user="root", password="2468"
-            )
-            cursor = connection.cursor()
-            cursor.execute("SELECT first_name, last_name, position FROM employees WHERE id = %s", (self.employee_id,))
-            employee = cursor.fetchone()
-            if employee:
-                self.first_name.set(employee[0])
-                self.last_name.set(employee[1])
-                self.position.set(employee[2])
-        except Error as e:
-            print(f"Veritabanı Hatası: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-
-    def save_employee(self):
-        """Çalışan bilgilerini kaydeder veya günceller."""
-        first_name = self.first_name.get()
-        last_name = self.last_name.get()
-        position = self.position.get()
-
-        if not first_name or not last_name or not position:
-            messagebox.showerror("Hata", "Tüm alanlar doldurulmalıdır!")
-            return
-
-        try:
-            connection = connect(
-                host="localhost", database="project_management", user="root", password="2468"
-            )
+            connection = sqlite3.connect("project_management.db")
             cursor = connection.cursor()
 
-            # Yeni çalışan ekleme veya var olanı güncelleme
-            if self.employee_id:
-                query = "UPDATE employees SET first_name = %s, last_name = %s, position = %s WHERE id = %s"
-                cursor.execute(query, (first_name, last_name, position, self.employee_id))
-            else:
-                query = "INSERT INTO employees (first_name, last_name, position) VALUES (%s, %s, %s)"
-                cursor.execute(query, (first_name, last_name, position))
+            cursor.execute("""
+                UPDATE employees
+                SET name = ?, position = ?
+                WHERE id = ?
+            """, (new_name, new_position, employee_id))
 
             connection.commit()
-            messagebox.showinfo("Başarılı", "Çalışan başarıyla kaydedildi!")
-            self.destroy()
-            self.reload_callback()  # Çalışanlar güncellendikten sonra listeyi yenileyin
+            connection.close()
 
-        except Error as e:
-            print(f"Veritabanı Hatası: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
+            messagebox.showinfo("Başarılı", "Çalışan güncellendi.")
+            refresh_employee_list()
+            edit_window.destroy()
 
+        edit_window = tk.Toplevel()
+        edit_window.title("Çalışan Düzenle")
+        edit_window.geometry("400x300")
 
-class EmployeeWindow(tk.Toplevel):
-    def __init__(self, master=None):
-        super().__init__(master)
+        ttk.Label(edit_window, text="Çalışan Adı:").pack(pady=5)
+        new_employee_name_entry = ttk.Entry(edit_window)
+        new_employee_name_entry.insert(0, employee_name)
+        new_employee_name_entry.pack(pady=5)
 
-        self.title("Çalışan Yönetim Sistemi")
-        self.geometry("700x500")
-        self.resizable(False, False)
+        ttk.Label(edit_window, text="Pozisyon:").pack(pady=5)
+        new_position_entry = ttk.Entry(edit_window)
+        new_position_entry.insert(0, position)
+        new_position_entry.pack(pady=5)
 
-        # Başlık
-        header_label = tk.Label(self, text="Çalışan Yönetim Sistemi", font=("Arial", 18))
-        header_label.pack(pady=10)
+        ttk.Button(edit_window, text="Kaydet", command=save_edited_employee).pack(pady=10)
 
-        # Çalışanlar Çerçevesi
-        employee_frame = ttk.LabelFrame(self, text="Çalışanlar")
-        employee_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        self.employee_tree = ttk.Treeview(
-            employee_frame, columns=("ID", "Ad", "Soyad", "Pozisyon"), show="headings"
-        )
-        self.employee_tree.heading("ID", text="ID")
-        self.employee_tree.heading("Ad", text="Ad")
-        self.employee_tree.heading("Soyad", text="Soyad")
-        self.employee_tree.heading("Pozisyon", text="Pozisyon")
-
-        self.employee_tree.column("ID", width=50, anchor=tk.CENTER)
-        self.employee_tree.column("Ad", width=200)
-        self.employee_tree.column("Soyad", width=200)
-        self.employee_tree.column("Pozisyon", width=150)
-
-        self.employee_tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT, padx=5, pady=5)
-
-        scrollbar = ttk.Scrollbar(employee_frame, orient=tk.VERTICAL, command=self.employee_tree.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.employee_tree.config(yscrollcommand=scrollbar.set)
-
-        # Çalışanları Yükleme
-        self.load_employees()
-
-        # Düğme Çerçevesi
-        button_frame = tk.Frame(self)
-        button_frame.pack(fill=tk.X, padx=10, pady=10)
-
-        ttk.Button(button_frame, text="Çalışan Ekle", command=self.add_employee).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Çalışan Güncelle", command=self.update_employee).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Çalışan Sil", command=self.delete_employee).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Geri Dön", command=self.go_back).pack(side=tk.LEFT, padx=5)
-
-    def load_employees(self):
-        """Veritabanından çalışanları yükler."""
-        for row in self.employee_tree.get_children():
-            self.employee_tree.delete(row)
-
-        try:
-            connection = connect(
-                host="localhost", database="project_management", user="root", password="2468"
-            )
-            cursor = connection.cursor()
-            cursor.execute("SELECT * FROM employees")
-            employees = cursor.fetchall()
-            for employee in employees:
-                self.employee_tree.insert("", tk.END, values=employee)
-        except Error as e:
-            print(f"Veritabanı Hatası: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-
-    def add_employee(self):
-        """Yeni bir çalışan eklemek için bir pencere açar."""
-        EmployeeForm(self, "Ekle", self.load_employees)
-
-    def update_employee(self):
-        """Seçilen çalışanı güncellemek için bir pencere açar."""
-        selected = self.employee_tree.selection()
-        if not selected:
-            messagebox.showwarning("Hata", "Güncellemek için bir çalışan seçin!")
+    def view_employee_details():
+        selected_item = employee_list.selection()
+        if not selected_item:
+            messagebox.showerror("Hata", "Detaylarını görmek için bir çalışan seçiniz.")
             return
 
-        employee_id = self.employee_tree.item(selected[0], "values")[0]
-        EmployeeForm(self, "Güncelle", self.load_employees, employee_id)
+        employee_id = employee_list.item(selected_item)["values"][0]
 
-    def delete_employee(self):
-        """Seçilen çalışanı siler."""
-        selected = self.employee_tree.selection()
-        if not selected:
-            messagebox.showwarning("Hata", "Silmek için bir çalışan seçin!")
-            return
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
 
-        employee_id = self.employee_tree.item(selected[0], "values")[0]
+        cursor.execute("""
+            SELECT projects.name, tasks.name, tasks.status
+            FROM employees
+            JOIN employee_tasks ON employees.id = employee_tasks.employee_id
+            JOIN tasks ON employee_tasks.task_id = tasks.id
+            JOIN projects ON tasks.project_id = projects.id
+            WHERE employees.id = ?
+        """, (employee_id,))
 
-        confirm = messagebox.askyesno("Emin misiniz?", "Çalışanı silmek istediğinizden emin misiniz?")
-        if not confirm:
-            return
+        tasks = cursor.fetchall()
+        connection.close()
 
-        try:
-            connection = connect(
-                host="localhost", database="project_management", user="root", password="2468"
-            )
-            cursor = connection.cursor()
-            cursor.execute("DELETE FROM employees WHERE id = %s", (employee_id,))
-            connection.commit()
-            messagebox.showinfo("Başarılı", "Çalışan başarıyla silindi!")
-            self.employee_tree.delete(selected[0])
-        except Error as e:
-            print(f"Veritabanı Hatası: {e}")
-        finally:
-            if connection.is_connected():
-                cursor.close()
-                connection.close()
-    def go_back(self):
-    # Geri gitmek için bu fonksiyonu ekliyoruz
-        self.destroy()  # Mevcut pencereyi kapat
-        self.master.deiconify()  # Ana pencereyi göster            
+        details_window = tk.Toplevel()
+        details_window.title("Çalışan Detayları")
+        details_window.geometry("600x400")
+
+        ttk.Label(details_window, text="Çalışanın Görev Detayları:").pack(pady=10)
+
+        details_list = ttk.Treeview(details_window, columns=("Proje", "Görev", "Durum"), show="headings")
+        details_list.heading("Proje", text="Proje")
+        details_list.heading("Görev", text="Görev")
+        details_list.heading("Durum", text="Durum")
+        details_list.pack(fill=tk.BOTH, expand=True, pady=10)
+
+        for task in tasks:
+            details_list.insert("", tk.END, values=task)
+
+    def refresh_employee_list():
+        for row in employee_list.get_children():
+            employee_list.delete(row)
+
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT id, name, position FROM employees")
+        for row in cursor.fetchall():
+            employee_list.insert("", tk.END, values=row)
+
+        connection.close()
+
+    def show_employee_form():
+        employee_form_frame.pack(pady=10)
+        button_frame.pack_forget()
+
+    def hide_employee_form():
+        employee_form_frame.pack_forget()
+        button_frame.pack(pady=10)
+
+    def go_back_to_main():
+        employee_window.destroy()
+
+    employee_window = tk.Toplevel()
+    employee_window.title("Çalışan Yönetimi")
+    employee_window.geometry("600x400")
+
+    employee_form_frame = ttk.Frame(employee_window)
+
+    ttk.Label(employee_form_frame, text="Çalışan Adı:").pack(pady=5)
+    employee_name_entry = ttk.Entry(employee_form_frame)
+    employee_name_entry.pack(pady=5)
+
+    ttk.Label(employee_form_frame, text="Pozisyon:").pack(pady=5)
+    position_entry = ttk.Entry(employee_form_frame)
+    position_entry.pack(pady=5)
+
+    ttk.Button(employee_form_frame, text="Ekle", command=add_employee, width=20).pack(pady=5)
+    employee_form_frame.pack_forget()
+
+    button_frame = ttk.Frame(employee_window)
+    button_frame.pack(pady=10)
+
+    ttk.Button(button_frame, text="Çalışan Ekle", command=show_employee_form, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Sil", command=delete_employee, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Düzenle", command=edit_employee, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Detayları Gör", command=view_employee_details, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Geri Dön", command=go_back_to_main, width=20).pack(side=tk.LEFT, padx=5)
+
+    employee_list = ttk.Treeview(employee_window, columns=("ID", "Ad", "Pozisyon"), show="headings")
+    employee_list.heading("ID", text="ID")
+    employee_list.heading("Ad", text="Ad")
+    employee_list.heading("Pozisyon", text="Pozisyon")
+    employee_list.pack(fill=tk.BOTH, expand=True, pady=10)
+
+    refresh_employee_list()
