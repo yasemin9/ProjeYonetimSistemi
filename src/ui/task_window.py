@@ -161,6 +161,10 @@ def open_task_window():
         messagebox.showinfo("Başarılı", "Görev başarıyla silindi.")
         refresh_task_list()
 
+
+    def go_back():
+        task_window.destroy()
+        
     def edit_task():
         selected_item = task_list.selection()
         if not selected_item:
@@ -207,6 +211,7 @@ def open_task_window():
                 """, (project_id, employee_id, updated_task_name, updated_start_date, updated_end_date, updated_status, updated_man_days, task_id))
 
                 connection.commit()
+                update_project_end_date_and_delay(project_id)
                 connection.close()
 
                 refresh_task_list()
@@ -217,6 +222,9 @@ def open_task_window():
                 messagebox.showerror("Hata", "Lütfen tüm alanları doğru şekilde doldurun.")
             except sqlite3.Error as e:
                 messagebox.showerror("Hata", f"Veritabanı hatası: {e}")
+
+    
+           
 
         edit_window = tk.Toplevel(task_window)
         edit_window.title("Görev Düzenle")
@@ -287,8 +295,9 @@ def open_task_window():
     task_list.heading("Durum", text="Durum")
     task_list.heading("Adam-Gün", text="Adam-Gün")
 
-    ttk.Button(task_window, text="Yeni Görev Ekle", command=add_task_window).pack(pady=5)
-    ttk.Button(task_window, text="Görev Düzenle", command=edit_task).pack(pady=5)
-    ttk.Button(task_window, text="Görev Sil", command=delete_task).pack(pady=5)
+    ttk.Button(task_window, text="Yeni Görev Ekle", command=add_task_window).pack(side=tk.LEFT, padx=10)
+    ttk.Button(task_window, text="Görev Düzenle", command=edit_task).pack(side=tk.LEFT, padx=10)
+    ttk.Button(task_window, text="Görev Sil", command=delete_task).pack(side=tk.LEFT, padx=10)
+    ttk.Button(task_window, text="Geri Dön", command=go_back).pack(side=tk.LEFT, padx=10)
 
     refresh_task_list()
