@@ -99,19 +99,18 @@ def open_employee_window():
 
         # Seçilen çalışanın ID'sini al
         employee_id = employee_list.item(selected_item)["values"][0]
-        print(f"Employee ID: {employee_id}")  # Debugging line
+        
 
         # Veritabanı bağlantısı kur ve görevleri çek
         connection = sqlite3.connect("project_management.db")
         cursor = connection.cursor()
 
         cursor.execute("""
-            SELECT projects.name, tasks.name, tasks.status
-            FROM employees
-            JOIN employee_tasks ON employees.id = employee_tasks.employee_id
-            JOIN tasks ON employee_tasks.task_id = tasks.id
+            SELECT projects.name AS project_name, tasks.name AS task_name, tasks.status AS task_status
+            FROM tasks
             JOIN projects ON tasks.project_id = projects.id
-            WHERE employees.id = ?
+            WHERE tasks.employee_id = ?
+
         """, (employee_id,))
 
         tasks = cursor.fetchall()
@@ -186,10 +185,10 @@ def open_employee_window():
     button_frame.pack(pady=10)
 
     ttk.Button(button_frame, text="Çalışan Ekle", command=show_employee_form, width=20).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Sil", command=delete_employee, width=20).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Düzenle", command=edit_employee, width=20).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Detayları Gör", command=view_employee_details, width=20).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Geri Dön", command=go_back_to_main, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Sil", command=delete_employee, width=15).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Düzenle", command=edit_employee, width=15).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Detayları Gör", command=view_employee_details, width=15).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Geri Dön", command=go_back_to_main, width=15).pack(side=tk.LEFT, padx=5)
 
     employee_list = ttk.Treeview(employee_window, columns=("ID", "Ad", "Pozisyon"), show="headings")
     employee_list.heading("ID", text="ID")
@@ -197,5 +196,9 @@ def open_employee_window():
     employee_list.heading("Pozisyon", text="Pozisyon")
     employee_list.pack(fill=tk.BOTH, expand=True, pady=10)
 
-    refresh_employee_list()
+    employee_list.column("ID", width=50, anchor="center")
+    employee_list.column("Ad", width=200, anchor="center")
+    employee_list.column("Pozisyon", width=150, anchor="center")
+    
 
+    refresh_employee_list()

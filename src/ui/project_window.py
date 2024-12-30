@@ -158,6 +158,12 @@ def open_project_window():
     project_list.heading("Proje Adı", text="Proje Adı")
     project_list.heading("Başlangıç", text="Başlangıç Tarihi")
     project_list.heading("Bitiş", text="Bitiş Tarihi")
+
+    project_list.column("ID", width=50, anchor="center")
+    project_list.column("Proje Adı", width=200, anchor="center")
+    project_list.column("Başlangıç", width=150, anchor="center")
+    project_list.column("Bitiş", width=150, anchor="center")
+
     project_list.pack(fill=tk.BOTH, expand=True, pady=10)
 
     refresh_project_list()

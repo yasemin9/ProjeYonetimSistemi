@@ -281,7 +281,7 @@ def open_task_window():
 
     task_window = tk.Toplevel()
     task_window.title("Görevler")
-    task_window.geometry("600x400")
+    task_window.geometry("1200x600")
 
     task_list = ttk.Treeview(task_window, columns=("ID", "Proje", "Çalışan", "Görev", "Başlangıç Tarihi", "Bitiş Tarihi", "Durum", "Adam-Gün"), show="headings")
     task_list.pack(fill=tk.BOTH, expand=True)
@@ -294,6 +294,15 @@ def open_task_window():
     task_list.heading("Bitiş Tarihi", text="Bitiş Tarihi")
     task_list.heading("Durum", text="Durum")
     task_list.heading("Adam-Gün", text="Adam-Gün")
+
+    task_list.column("ID", width=50, anchor=tk.CENTER)
+    task_list.column("Proje", width=150, anchor=tk.CENTER)
+    task_list.column("Çalışan", width=150, anchor=tk.CENTER)
+    task_list.column("Görev", width=150, anchor=tk.CENTER)
+    task_list.column("Başlangıç Tarihi", width=120, anchor=tk.CENTER)
+    task_list.column("Bitiş Tarihi", width=120, anchor=tk.CENTER)
+    task_list.column("Durum", width=120, anchor=tk.CENTER)
+    task_list.column("Adam-Gün", width=100, anchor=tk.CENTER)
 
     ttk.Button(task_window, text="Yeni Görev Ekle", command=add_task_window).pack(side=tk.LEFT, padx=10)
     ttk.Button(task_window, text="Görev Düzenle", command=edit_task).pack(side=tk.LEFT, padx=10)
