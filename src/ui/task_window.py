@@ -7,6 +7,7 @@ from datetime import datetime
 def get_db_connection():
     return sqlite3.connect("project_management.db")
 
+
 # Proje bitiş tarihi ve gecikme kontrolü
 def update_project_end_date_and_delay(project_id):
     connection = get_db_connection()
@@ -250,6 +251,9 @@ def open_task_window():
                 except ValueError:
                     messagebox.showerror("Hata", "Tarih formatı veya adam-gün hatalı.")
                     return
+                
+                connection = get_db_connection()
+                cursor = connection.cursor()
 
                 cursor.execute("""
                     UPDATE tasks
