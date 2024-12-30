@@ -61,7 +61,7 @@ def open_employee_window():
             connection = sqlite3.connect("project_management.db")
             cursor = connection.cursor()
 
-            cursor.execute("""
+            cursor.execute(""" 
                 UPDATE employees
                 SET name = ?, position = ?
                 WHERE id = ?
@@ -90,55 +90,78 @@ def open_employee_window():
 
         ttk.Button(edit_window, text="Kaydet", command=save_edited_employee).pack(pady=10)
 
-    def view_employee_details():
-        # Seçilen çalışanı al
-        selected_item = employee_list.selection()
-        if not selected_item:
-            messagebox.showerror("Hata", "Detaylarını görmek için bir çalışan seçiniz.")
-            return
+    def show_employee_details():
+        def refresh_employee_details():
+            employee_id = employee_combobox.get().split(" - ")[0]
+            if not employee_id:
+                messagebox.showerror("Hata", "Lütfen bir çalışan seçin.")
+                return
 
-        # Seçilen çalışanın ID'sini al
-        employee_id = employee_list.item(selected_item)["values"][0]
-        
+            # Çalışanın görevlerini veritabanından alıyoruz
+            connection = sqlite3.connect("project_management.db")
+            cursor = connection.cursor()
 
-        # Veritabanı bağlantısı kur ve görevleri çek
-        connection = sqlite3.connect("project_management.db")
-        cursor = connection.cursor()
+            cursor.execute("""
+                SELECT projects.name, tasks.name, tasks.status, tasks.start_date, tasks.end_date
+                FROM tasks
+                JOIN projects ON tasks.project_id = projects.id
+                WHERE tasks.employee_id = ?
+            """, (employee_id,))
+            tasks = cursor.fetchall()
 
-        cursor.execute("""
-            SELECT projects.name AS project_name, tasks.name AS task_name, tasks.status AS task_status
-            FROM tasks
-            JOIN projects ON tasks.project_id = projects.id
-            WHERE tasks.employee_id = ?
+            # Tamamlanan ve tamamlanmayan görev sayısını hesaplıyoruz
+            completed_tasks = sum(1 for task in tasks if task[2] == "Tamamlandı")
+            not_completed_tasks = len(tasks) - completed_tasks
 
-        """, (employee_id,))
+            # Sayıları gösteren etiketler
+            completed_label.config(text=f"Tamamlanan Görevler: {completed_tasks}")
+            not_completed_label.config(text=f"Tamamlanmayan Görevler: {not_completed_tasks}")
 
-        tasks = cursor.fetchall()
-        connection.close()
+            connection.close()
 
-        # Eğer çalışan için görev yoksa uyarı ver
-        if not tasks:
-            messagebox.showinfo("Bilgi", "Bu çalışanın görevi yok.")
-            return
+            # Detayları Treeview'de gösteriyoruz
+            for row in details_tree.get_children():
+                details_tree.delete(row)
 
-        # Detaylar penceresini oluştur
+            for task in tasks:
+                details_tree.insert("", tk.END, values=task)
+
+        # Yeni bir pencere oluşturuluyor
         details_window = tk.Toplevel()
         details_window.title("Çalışan Detayları")
-        details_window.geometry("600x400")
+        details_window.geometry("800x500")
 
-        # Başlık etiketi
-        ttk.Label(details_window, text="Çalışanın Görev Detayları:").pack(pady=10)
+        # Çalışanları seçmek için combobox
+        ttk.Label(details_window, text="Çalışan Seç:").pack(pady=5)
+        employee_combobox = ttk.Combobox(details_window)
+        employee_combobox.pack(pady=5)
 
-        # Treeview widget'ı oluştur
-        details_list = ttk.Treeview(details_window, columns=("Proje", "Görev", "Durum"), show="headings")
-        details_list.heading("Proje", text="Proje")
-        details_list.heading("Görev", text="Görev")
-        details_list.heading("Durum", text="Durum")
-        details_list.pack(fill=tk.BOTH, expand=True, pady=10)
+        # Çalışanları veritabanından alıp combobox'a ekliyoruz
+        connection = sqlite3.connect("project_management.db")
+        cursor = connection.cursor()
+        cursor.execute("SELECT id, name FROM employees")
+        employees = cursor.fetchall()
+        connection.close()
+        employee_combobox["values"] = [f"{emp[0]} - {emp[1]}" for emp in employees]
 
-        # Veritabanından gelen görevleri Treeview'a ekle
-        for task in tasks:
-            details_list.insert("", tk.END, values=task)
+        # Detayları gösterme butonu
+        ttk.Button(details_window, text="Detayları Göster", command=refresh_employee_details).pack(pady=10)
+
+        # Tamamlanan ve tamamlanmayan görev sayıları için etiketler
+        completed_label = ttk.Label(details_window, text="Tamamlanan Görevler: 0")
+        completed_label.pack(pady=5)
+
+        not_completed_label = ttk.Label(details_window, text="Tamamlanmayan Görevler: 0")
+        not_completed_label.pack(pady=5)
+
+        # Görev Detayları Listesi (Treeview)
+        details_tree = ttk.Treeview(details_window, columns=("Proje", "Görev", "Durum", "Başlangıç", "Bitiş"), show="headings")
+        details_tree.heading("Proje", text="Proje")
+        details_tree.heading("Görev", text="Görev")
+        details_tree.heading("Durum", text="Durum")
+        details_tree.heading("Başlangıç", text="Başlangıç Tarihi")
+        details_tree.heading("Bitiş", text="Bitiş Tarihi")
+        details_tree.pack(fill=tk.BOTH, expand=True, pady=10)
 
     def refresh_employee_list():
         for row in employee_list.get_children():
@@ -185,20 +208,15 @@ def open_employee_window():
     button_frame.pack(pady=10)
 
     ttk.Button(button_frame, text="Çalışan Ekle", command=show_employee_form, width=20).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Sil", command=delete_employee, width=15).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Düzenle", command=edit_employee, width=15).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Detayları Gör", command=view_employee_details, width=15).pack(side=tk.LEFT, padx=5)
-    ttk.Button(button_frame, text="Geri Dön", command=go_back_to_main, width=15).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Sil", command=delete_employee, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Düzenle", command=edit_employee, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Detayları Gör", command=show_employee_details, width=20).pack(side=tk.LEFT, padx=5)
+    ttk.Button(button_frame, text="Geri Dön", command=go_back_to_main, width=20).pack(side=tk.LEFT, padx=5)
 
     employee_list = ttk.Treeview(employee_window, columns=("ID", "Ad", "Pozisyon"), show="headings")
     employee_list.heading("ID", text="ID")
     employee_list.heading("Ad", text="Ad")
     employee_list.heading("Pozisyon", text="Pozisyon")
     employee_list.pack(fill=tk.BOTH, expand=True, pady=10)
-
-    employee_list.column("ID", width=50, anchor="center")
-    employee_list.column("Ad", width=200, anchor="center")
-    employee_list.column("Pozisyon", width=150, anchor="center")
-    
 
     refresh_employee_list()

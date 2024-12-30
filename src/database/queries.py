@@ -51,12 +51,13 @@ def create_database(db_name="project_management.db"):
     # Çalışan-Görev İlişkisi Tablosu
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS employee_tasks (
-        employee_id INTEGER NOT NULL,
-        task_id INTEGER NOT NULL,
-        FOREIGN KEY (employee_id) REFERENCES employees(id),
-        FOREIGN KEY (task_id) REFERENCES tasks(id)
-    )
-    """)
+    employee_id INTEGER NOT NULL,
+    task_id INTEGER NOT NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees(id),
+    FOREIGN KEY (task_id) REFERENCES tasks(id),
+    PRIMARY KEY (employee_id, task_id) -- Aynı çalışan ve görev ilişkisini birden fazla kez eklemeyi önler
+)
+""")
 
     conn.commit()
     conn.close()
@@ -128,6 +129,7 @@ def read_tasks(db_name="project_management.db"):
         JOIN employees ON tasks.employee_id = employees.id
     """)
     tasks = cursor.fetchall()
+    print("Tasks:", tasks)
     conn.close()
     return tasks
 
@@ -166,6 +168,8 @@ def get_employee_task_details(employee_id, db_name="project_management.db"):
     """, (employee_id,))
     employee_tasks = cursor.fetchall()
     conn.close()
+    
+    print(f"Çalışan ID: {employee_id} için görevler: {employee_tasks}")
     return employee_tasks
 
 # Çalışan Görevlerini Listeleme
